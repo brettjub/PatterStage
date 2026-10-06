@@ -29,7 +29,7 @@
 
 ## Live agent process observation
 
-### Contract (implemented server-side in a separate branch)
+### Contract (implemented server-side in this branch)
 
 `GET /api/mission-control/agents`
 
@@ -51,11 +51,11 @@ The PC runs Control Hub. The route on the PC opens an SSH connection to the VPS 
 
 #### 1. Deploy the exporter script on the VPS
 
-The exporter script ships in the backend branch. Its file name and path may change, so locate it in that branch rather than relying on a path documented here.
+The exporter script ships at `scripts/mission-control/export-agent-snapshot.py`. The route requires a configured absolute path to the copied VPS script.
 
-1. Copy it to the VPS as a **dedicated, non-root user** (for example a `mc-observer` account), at a path that user owns, such as `~/bin/`. Then run `chmod 755` on it.
+1. Copy it to the VPS as a **non-root user** at a path that user owns, such as `~/bin/export-agent-snapshot.py`. Then run `chmod 755` on it. A dedicated observer account is preferable if it has the needed process visibility; to read an existing Hermes coordinator schedule, the SSH account must have permission to read that account's `~/.hermes/cron/jobs.json` (the exporter never prints its contents).
 2. Confirm that it only *reads* the process table and prints the JSON the route expects. It must not start, stop or signal processes, and must not read secrets or environment variables of other processes.
-3. Run it once by hand on the VPS and inspect the output before connecting anything.
+3. Run it once by hand on the VPS and inspect the output before connecting anything. The optional coordinator row appears only when the VPS exporter process has `MC_COORDINATOR_JOB_ID` set locally; keep the real job ID out of this public repo and out of the PC's environment.
 
 #### 2. Create a dedicated SSH key on the PC and restrict it on the VPS
 
@@ -101,10 +101,10 @@ Add to `.env.local`. Do not hardcode a VPS host anywhere in the repo:
 
 ```bash
 MC_AGENT_SSH_TARGET=mc-vps                                   # SSH alias (or user@host) from ~/.ssh/config
-MC_AGENT_SSH_REMOTE_SCRIPT=/home/mc-observer/bin/<exporter-script>  # absolute path on the VPS
+MC_AGENT_SSH_REMOTE_SCRIPT=/home/mc-observer/bin/export-agent-snapshot.py  # absolute path on the VPS
 ```
 
-Restart the server. If either variable is unset, the route should answer 503, and the page shows NOT CONNECTED. Confirm the exact enable/disable behaviour in the backend branch's documentation.
+Restart the server. If either variable is unset, the route answers 503, and the page shows NOT CONNECTED. See `docs/mission-control-agent-snapshot.md` for the server-side behavior.
 
 Check the SSH leg by hand first: `ssh mc-vps` should print the exporter's JSON and exit.
 
@@ -125,7 +125,7 @@ Required for any instance that sets `MC_AGENT_SSH_TARGET`:
 2. **Use an isolated `HERMES_HOME` and `CH_DATA_DIR`.** Point both at scratch directories created for this instance, not at your real `~/.hermes` or production Control Hub data. That way the shell's other routes cannot read or modify real agent configuration, cron, sessions or credentials.
 3. **Never expose it publicly.** No port forwarding, public reverse proxy, tunnel (ngrok, Cloudflare Tunnel, Tailscale Funnel, etc.) or cloud deployment.
 4. **`CH_READ_ONLY` is not authentication.** It only makes routes that call `requireAuth()` refuse writes. It does not stop anyone from reading data, it does not cover every route, and it does not identify the caller. Set it as defence in depth, but do not rely on it.
-5. **Keep the SSH key narrow:** a dedicated key, a dedicated non-root VPS user, a forced command, `restrict`, and a pinned host key, as described above.
+5. **Keep the SSH key narrow:** a dedicated key, a non-root VPS user with only the needed read permissions, a forced command, `restrict`, and a pinned host key, as described above.
 
 Owner authentication and deny-by-default writes must exist before this page, or the shell around it, is reachable by anything but the local machine.
 
