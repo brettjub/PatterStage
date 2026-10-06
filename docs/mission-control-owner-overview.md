@@ -55,7 +55,7 @@ The exporter script ships at `scripts/mission-control/export-agent-snapshot.py`.
 
 1. Copy it to the VPS as a **non-root user** at a path that user owns, such as `~/bin/export-agent-snapshot.py`. Then run `chmod 755` on it. A dedicated observer account is preferable if it has the needed process visibility; to read an existing Hermes coordinator schedule, the SSH account must have permission to read that account's `~/.hermes/cron/jobs.json` (the exporter never prints its contents).
 2. Confirm that it only *reads* the process table and prints the JSON the route expects. It must not start, stop or signal processes, and must not read secrets or environment variables of other processes.
-3. Run it once by hand on the VPS and inspect the output before connecting anything. The optional coordinator row appears only when the VPS exporter process has `MC_COORDINATOR_JOB_ID` set locally; keep the real job ID out of this public repo and out of the PC's environment.
+3. Run it once by hand on the VPS and inspect the output before connecting anything. The optional coordinator row appears only when the VPS exporter has `MC_COORDINATOR_JOB_ID` set locally or reads a job ID from `~/.config/mission-control/coordinator-id` (mode 0600); keep the real ID out of this public repo and the PC's environment.
 
 #### 2. Create a dedicated SSH key on the PC and restrict it on the VPS
 

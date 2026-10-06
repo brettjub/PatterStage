@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('exporter', Path(__file__).resolve().parents[2] / 'scripts/mission-control/export-agent-snapshot.py')
 exporter = importlib.util.module_from_spec(spec)
@@ -11,6 +12,18 @@ spec.loader.exec_module(exporter)
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_coordinator_id_is_only_read_from_local_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            with patch.dict('os.environ', {}, clear=True):
+                self.assertIsNone(exporter.configured_coordinator_id(home))
+                config = home / '.config/mission-control/coordinator-id'
+                config.parent.mkdir(parents=True)
+                config.write_text('example-job-id\n')
+                self.assertEqual(exporter.configured_coordinator_id(home), 'example-job-id')
+                config.write_text('bad; command')
+                self.assertIsNone(exporter.configured_coordinator_id(home))
+
     def test_complete_absence_and_missing_proc(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

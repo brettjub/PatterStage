@@ -55,9 +55,10 @@ processes due to procfs mount policy cannot be established from this scan.
 Read failures or scan limits make absence unknown; observed running processes
 remain running with a partial coverage note. Non-Linux execution exits clearly.
 
-If `MC_COORDINATOR_JOB_ID` is set in the VPS exporter's environment, only that
-job ID is selected from `~/.hermes/cron/jobs.json`; otherwise no coordinator
-row is returned. Keep the real ID in a local protected wrapper or forced SSH
+If `MC_COORDINATOR_JOB_ID` is set in the VPS exporter's environment, or a job ID
+is stored in `~/.config/mission-control/coordinator-id` (mode 0600), only that
+ID is selected from `~/.hermes/cron/jobs.json`; otherwise no coordinator row
+is returned. Keep the real ID in this local protected file or a forced SSH
 command, not in this public repository. Disabled means paused; enabled,
 missing, malformed, or unreadable means unknown because scheduling does not
 establish process activity.

@@ -11,6 +11,18 @@ SOURCE = 'vps-agent-snapshot'
 MAX_PROCESSES = 32768
 
 
+def configured_coordinator_id(home):
+    value = os.environ.get('MC_COORDINATOR_JOB_ID')
+    if value is None:
+        try:
+            with (home / '.config/mission-control/coordinator-id').open('rb') as handle:
+                raw = handle.read(65)
+            value = raw.decode('ascii').strip()
+        except (OSError, UnicodeError):
+            return None
+    return value if re.fullmatch(r'[A-Za-z0-9_-]{6,64}', value) else None
+
+
 def scan_processes(proc, worktree_root=None):
     worktree_root = worktree_root or Path.home() / 'worktrees'
     found = {'claude': [], 'codex': []}
@@ -106,5 +118,6 @@ if __name__ == '__main__':
     if sys.platform != 'linux':
         sys.stderr.write('Agent snapshot requires Linux /proc.\n')
         sys.exit(1)
-    print(json.dumps(snapshot(Path('/proc'), Path.home() / '.hermes/cron/jobs.json',
-                              os.environ.get('MC_COORDINATOR_JOB_ID')), separators=(',', ':')))
+    home = Path.home()
+    print(json.dumps(snapshot(Path('/proc'), home / '.hermes/cron/jobs.json',
+                              configured_coordinator_id(home)), separators=(',', ':')))
