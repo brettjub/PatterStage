@@ -5,6 +5,7 @@
  */
 export const APP_NAV_ROUTES: readonly string[] = [
   "/",
+  "/mission-control",
   "/operations/agents",
   "/operations/tools",
   "/config",
