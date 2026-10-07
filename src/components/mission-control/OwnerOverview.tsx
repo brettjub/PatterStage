@@ -263,7 +263,7 @@ function registerSummary(register: RegisterState, nowMs: number): { needs: strin
   const blocked = obs.projects.find((p) => p.blocker);
   const blockerText = blocked
     ? `${blocked.name} — ${blocked.blocker} (recorded in register, not verified)`
-    : "No blocker recorded in register (recorded, not verified)";
+    : "No blocker entered in the owner register; actual blockers unknown";
   if (display === "live") {
     return {
       needs: `${count} recorded in register${oldestText} — ${provenance}`,

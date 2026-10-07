@@ -45,7 +45,7 @@ function TargetImpact({ target, impact }: { target: string; impact: string }) {
       <dt className="text-white/50">Target</dt>
       <dd className="text-white/80 min-w-0 break-words">{target}</dd>
       <dt className="text-white/50">Impact</dt>
-      <dd className="text-white/80 min-w-0 break-words">{impact}</dd>
+      <dd className="text-white/80 min-w-0 break-words">{impact || "Not recorded"}</dd>
     </dl>
   );
 }

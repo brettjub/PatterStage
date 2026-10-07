@@ -175,6 +175,16 @@ describe("parseRegisterResponse — strict contract", () => {
     expect(parsed.observation.sheetUrl).toBe(SHEET);
   });
 
+  it("accepts the actual exporter shape: unknown seeded projects with blank manual fields", () => {
+    const parsed = parseRegisterResponse(registerBody({ projects: [
+      { id: "ngm", name: "New Growth Media", outcome: "", recordedState: "unknown", position: "", blocker: "", nextMove: "" },
+      { id: "launchhost", name: "Launchhost", outcome: "", recordedState: "unknown", position: "", blocker: "", nextMove: "" },
+    ] }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.observation.projects.map((p) => p.ownerReviewedAt)).toEqual([undefined, undefined]);
+  });
+
   it.each([
     ["not an object", []],
     ["wrong schemaVersion", registerBody({ schemaVersion: 2 })],
@@ -191,6 +201,7 @@ describe("parseRegisterResponse — strict contract", () => {
     ["extra decision field (e.g. a status)", registerBody({ decisions: [decision(1, { status: "approved" })] })],
     ["duplicate decision id", registerBody({ decisions: [decision(1), decision(1)] })],
     ["invalid recordedState", registerBody({ projects: [{ ...SEEDED_PROJECTS[0], recordedState: "healthy" }] })],
+    ["unreviewed active claim", registerBody({ projects: [{ ...SEEDED_PROJECTS[0], recordedState: "active" }] })],
     ["missing nextMove", registerBody({ projects: [{ ...SEEDED_PROJECTS[0], nextMove: undefined }] })],
     ["duplicate project id", registerBody({ projects: [SEEDED_PROJECTS[0], SEEDED_PROJECTS[0]] })],
     ["non-string sourceUrl", registerBody({ projects: [{ ...SEEDED_PROJECTS[0], sourceUrl: 42 }] })],
@@ -244,7 +255,7 @@ describe("URL allowlists", () => {
   });
 
   it("allows only https Google Drive/Docs and GitHub row sources without credentials or port", () => {
-    expect(safeRegisterSourceUrl("https://github.com/o/r/pull/1")).toBe("https://github.com/o/r/pull/1");
+    expect(safeRegisterSourceUrl("https://github.com/brettjub/PatterStage/pull/1")).toBe("https://github.com/brettjub/PatterStage/pull/1");
     expect(safeRegisterSourceUrl("https://drive.google.com/file/d/x/view")).toBe("https://drive.google.com/file/d/x/view");
     expect(safeRegisterSourceUrl("https://docs.google.com/document/d/x/edit")).toBe("https://docs.google.com/document/d/x/edit");
     for (const bad of [
@@ -252,6 +263,8 @@ describe("URL allowlists", () => {
       "https://tok@github.com/o/r",
       "https://github.com:444/o/r",
       "https://gist.github.com/x",
+      "https://github.com/o/r/pull/1",
+      "https://docs.google.com/document/d/x/edit?secret=1",
       "https://evil.example/",
       "data:text/html,hi",
     ]) {
@@ -325,7 +338,7 @@ describe("OwnerOverview — seeded unknown projects", () => {
       expect(row).toHaveTextContent("Owner register · read just now");
     }
     expect(radarSection()).toHaveTextContent("a successful read is not verification");
-    expect(screen.getByTestId("mc-summary-blocker")).toHaveTextContent("No blocker recorded in register");
+    expect(screen.getByTestId("mc-summary-blocker")).toHaveTextContent("No blocker entered in the owner register; actual blockers unknown");
   });
 
   it("shows owner-reviewed freshness separately from the register read time", () => {
@@ -357,7 +370,7 @@ describe("OwnerOverview — nonempty decisions", () => {
     const { container } = renderWith(
       registerOk({
         decisions: [
-          decision(2, { raisedAt: iso(NOW - 1 * DAY), sourceUrl: "https://github.com/o/r/issues/2" }),
+          decision(2, { raisedAt: iso(NOW - 1 * DAY), sourceUrl: "https://github.com/brettjub/PatterStage/issues/2" }),
           decision(1, { raisedAt: iso(NOW - 4 * DAY), ownerReviewedAt: iso(NOW - DAY) }),
         ],
       })
@@ -373,7 +386,7 @@ describe("OwnerOverview — nonempty decisions", () => {
     expect(items[0]).toHaveTextContent("Owner reviewed 24h ago");
     expect(items[1]).toHaveTextContent("No owner review recorded");
     const link = within(items[1]).getByRole("link", { name: /Source/ });
-    expect(link).toHaveAttribute("href", "https://github.com/o/r/issues/2");
+    expect(link).toHaveAttribute("href", "https://github.com/brettjub/PatterStage/issues/2");
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getByTestId("mc-summary-needs")).toHaveTextContent(
       "2 open decisions recorded in register · oldest raised 4d ago"

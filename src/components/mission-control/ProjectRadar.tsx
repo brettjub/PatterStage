@@ -35,7 +35,7 @@ function ProjectFields({ p }: { p: Pick<RegisterProject, "recordedState" | "posi
       <dt className="text-white/50">Recorded state</dt>
       <dd className="text-white/80">{PROJECT_STATE_LABEL[p.recordedState]}</dd>
       <dt className="text-white/50">Position</dt>
-      <dd className="text-white/80 min-w-0 break-words">{p.position}</dd>
+      <dd className="text-white/80 min-w-0 break-words">{p.position || "Not recorded"}</dd>
       {p.blocker && (
         <>
           <dt className="text-semantic-warning">Recorded blocker</dt>
@@ -43,7 +43,7 @@ function ProjectFields({ p }: { p: Pick<RegisterProject, "recordedState" | "posi
         </>
       )}
       <dt className="text-white/50">Next move</dt>
-      <dd className="text-white/80 min-w-0 break-words">{p.nextMove}</dd>
+      <dd className="text-white/80 min-w-0 break-words">{p.nextMove || "Not recorded"}</dd>
     </dl>
   );
 }
@@ -89,7 +89,7 @@ function RegisterRadar({ register, nowMs }: { register: RegisterState; nowMs: nu
                   <h3 className="text-sm font-semibold text-white">{p.name}</h3>
                   <TextChip dashed={review !== "reviewed"}>{REVIEW_CHIP[review]}</TextChip>
                 </div>
-                <p className="mt-1 text-xs text-white/70">{p.outcome}</p>
+                <p className="mt-1 text-xs text-white/70">{p.outcome || "Outcome not recorded"}</p>
                 <ProjectFields p={p} />
                 <RegisterRowProvenance
                   register={register}

@@ -4,13 +4,13 @@
 
 **Status: OBSERVED DATA ONLY, partial coverage. The page shows no demo or fixture data and is never LIVE as a whole.**
 
-The runtime page uses an explicit `observed` snapshot mode (`observed-snapshot.ts`). It is neither "demo" nor "fully live": it starts with no records and shows only what the two same-origin, read-only routes return.
+The runtime page uses an explicit `observed` snapshot mode (`observed-snapshot.ts`). It is neither "demo" nor "fully live": it starts with no records and shows only what the three same-origin, read-only routes return. A live read of a manually maintained Sheet is not independent verification of the recorded business facts.
 
 - **Agent board.** Can show live data. It polls the same-origin route `GET /api/mission-control/agents`, which shows which agent processes a VPS exporter observed. The browser never contacts the VPS.
 - **Live evidence.** Can show live data. It polls the same-origin route `GET /api/mission-control/evidence` on its own loop and lists Hermes task/run records, GitHub PR state/checks and Drive file metadata per source. It is a separate section: evidence never makes an inbox item or project live. See [Live evidence section](#live-evidence-section-ui).
 - **Observed artifacts.** Lists the Drive files and GitHub PRs from the same evidence observation, labelled as **observed artifacts**: not completed deliverables and not linked to any task. See [Observed artifacts shelf](#observed-artifacts-shelf).
-- **Owner inbox, Project radar.** No authoritative source exists yet, so both show **NOT CONNECTED — unknown** with no records. They never show `0 open`, `none` or project cards.
-- **No fabricated content.** No project statuses, approvals, costs, release gates or assignments are shown.
+- **Owner inbox, Project radar.** A separate, manually maintained Google Sheet supplies open decision rows and project positions through `GET /api/mission-control/register`. It starts with zero recorded open decisions and two NGM/Launchhost placeholder rows marked **unknown / UNVERIFIED**. `0 open decisions recorded in register` is shown only after a successful read; a failed read is unavailable/held/stale and cannot claim a current zero. Source-read time and owner-review time are separate. See `docs/mission-control-owner-register.md`.
+- **No fabricated content.** Project status appears only as manually recorded in the Sheet, with its owner-review time or UNVERIFIED label. No approvals, costs, release gates or assignments are inferred.
 - **No action controls.** The page has no dispatch, cancel, approve, save or send controls.
 - **Demo fixture.** `demo-fixture.ts` remains only so the pure `OwnerOverview` component can be tested in `demo`/`mixed` mode. `MissionControlClient` and the route never import it (a unit test checks this).
 
@@ -20,12 +20,12 @@ The runtime page uses an explicit `observed` snapshot mode (`observed-snapshot.t
 
 | Panel | Purpose | Content |
 |-------|---------|---------|
-| Banner + header badge | Persistent data-source notice (`SourceCoverageBanner`) | Names the state of each source (agent processes; Hermes schedule, GitHub PRs, Drive files) and says owner inbox and project radar are NOT CONNECTED. Title: `OBSERVED DATA ONLY · PARTIAL COVERAGE …` when any source is live; `… NO CURRENT SOURCE …` when only held/stale observations remain; `CONNECTING · STATE UNKNOWN` before the first polls settle; `NOT CONNECTED · STATE UNKNOWN` when nothing has been observed. Never says demo, never says the page is live. |
-| One-minute view | Owner inbox, agent state counts, biggest recorded blocker, freshness | Inbox: `NOT CONNECTED — unknown`. Blocker: `UNKNOWN — no project source connected`. Freshness: `N of 4 observed sources live · M not currently live (unknown, unavailable, held or stale) · 2 panels not connected` (the agents route plus three evidence sources; only fresh observations from a successful poll count as live). |
-| Owner inbox | Decisions and approvals | NOT CONNECTED — no authoritative source; no records. |
+| Banner + header badge | Persistent data-source notice (`SourceCoverageBanner`) | Names agent, evidence and manual owner-register read states separately. Title remains `OBSERVED DATA ONLY · PARTIAL COVERAGE …` when any source is live; a Sheet **LIVE READ** does not make project facts verified or the page fully connected. The Sheet edit link appears only after an allowlisted successful read. |
+| One-minute view | Owner inbox, agent state counts, biggest recorded blocker, freshness | Inbox count is scoped to **open decisions recorded in the Sheet**, only after a successful read. If no blocker is entered, actual blockers are unknown. Freshness counts five observed sources (agents, three evidence sources, manual register); unavailable/held/stale states never count as live. |
+| Owner inbox | Recorded open decisions; no approval control | On successful Sheet read, oldest open rows with exact target, impact, age, owner-review time and provenance. Empty means zero **recorded in this register**, not zero across all systems. A failed read holds the previous records with current count unknown. |
 | Agent board | **LIVE VPS AGENT PROCESS OBSERVATION**: connector status, source, checked-at, and one row per observed process | Live data when connected. Before the first successful poll there are no rows; the board shows NOT CONNECTED / unknown. |
 | Live evidence | Hermes / GitHub / Drive sources, each with its own LIVE, HELD, STALE, UNAVAILABLE or UNKNOWN state | Before the first successful poll every source is UNKNOWN. |
-| Project radar | Recorded project positions | NOT CONNECTED — no authoritative source; no project cards. |
+| Project radar | Manually recorded project positions | NGM and Launchhost start with unknown state and no owner review. Blank fields read "Not recorded"; status is not independently verified. A failed read holds prior rows with held/stale provenance, not a current healthy state. |
 | Observed artifacts | Drive files and GitHub PRs from the evidence observation | Per-source state chip and last-success time; items keep their own source timestamps. See below. |
 
 ### Demo fixture (tests only)
@@ -43,6 +43,12 @@ The runtime page uses an explicit `observed` snapshot mode (`observed-snapshot.t
   - **Unavailable:** "could not be read. This is not zero."
   - **Unknown:** "Not connected — state unknown."
 - **Links.** Only URLs that already passed `safeEvidenceUrl` at the client boundary (https, no credentials/port, allowlisted host per source) are linked, with `target="_blank" rel="noopener noreferrer"`. Others show "Link withheld".
+
+## Owner register (UI)
+
+- The register polls on an independent 60 s sequential loop (`cache: "no-store"`, 20 s request timeout). Every response is shape-checked; malformed rows reject the whole read rather than hiding a decision. The backend permits at most 100 decisions and 50 project rows, rejects formulas and requires owner-reviewed UTC time for any non-`unknown` project state.
+- A successful poll proves **Sheet read**, not owner review or external verification. Each row says when its owner review happened, if at all; reviews older than seven days say `OWNER REVIEW STALE`. The register source read goes stale after ten minutes. On an outage the prior observation stays visible but is never counted as current.
+- Links from cells are constrained to explicit Google Drive/Docs or PatterStage GitHub paths, over HTTPS with no credentials, port, query or fragment. Only the fixed approved Sheet edit URL is linked in the banner. No mutation controls exist in the dashboard.
 
 ## Live agent process observation
 
@@ -66,15 +72,15 @@ The runtime page uses an explicit `observed` snapshot mode (`observed-snapshot.t
 
 The PC runs Control Hub. The route on the PC opens an SSH connection to the VPS and runs a read-only exporter script there. The browser only ever talks to the PC on localhost.
 
-#### 1. Deploy the two read-only exporters on the VPS
+#### 1. Deploy the three read-only exporters on the VPS
 
-The agent and evidence exporters ship at `scripts/mission-control/export-agent-snapshot.py` and `scripts/mission-control/export-mission-evidence.py`. The routes require configured absolute VPS paths. The current VPS installation accepts the two corresponding `/home/brettjubinville/bin/` paths but dispatches the dedicated SSH key to root-owned copies under `/usr/local/libexec/mission-control/`. Never take an exporter command or path from a browser request.
+The agent, evidence and owner-register exporters and `ssh-dispatch.py` ship under `scripts/mission-control/`. The agent/evidence routes require configured absolute VPS paths; the register route uses a fixed third path. The current VPS installation accepts the three corresponding `/home/brettjubinville/bin/` paths but dispatches the dedicated SSH key to root-owned copies under `/usr/local/libexec/mission-control/`. Never take an exporter command or path from a browser request.
 
-The agent exporter observes process identities; the evidence exporter reads only the selected Hermes schedule/run, public PatterStage PR metadata and selected-folder Drive metadata. Neither provides approval or project-status authority. An optional Hermes coordinator ID is stored only in the VPS-local protected selector; do not put it in the repository or PC environment. Keep the Launchhost coordinator paused.
+The agent exporter observes process identities; the evidence exporter reads only the selected Hermes schedule/run, public PatterStage PR metadata and selected-folder Drive metadata. Neither provides approval or project-status authority. The register exporter reads the separate, manually maintained Google Sheet for owner-recorded decisions and project status, not approvals or external verification. Its selected sheet ID and Drive account selector stay in VPS-local protected files. See `docs/mission-control-owner-register.md`. An optional Hermes coordinator ID is also stored only in a VPS-local protected selector; do not put it in the repository or PC environment. Keep the Launchhost coordinator paused.
 
 #### 2. Restrict a dedicated SSH key
 
-Generate a dedicated ED25519 key in WSL (the current preview uses `~/.ssh/patterstage_mc`); the private key never leaves the PC. Authorize its **public** key on the VPS with `restrict,command="/usr/local/libexec/mission-control/ssh-dispatch.py"`. The root-owned dispatcher accepts only the two exact exporter paths in `SSH_ORIGINAL_COMMAND`, executes the root-owned copies without a shell, and rejects an interactive session or any other command. A bare `ssh <host>` is expected to fail for this key. Do not add an unrestricted personal key for the dashboard; keep this PC-local preview bound to localhost.
+Generate a dedicated ED25519 key in WSL (the current preview uses `~/.ssh/patterstage_mc`); the private key never leaves the PC. Authorize its **public** key on the VPS with `restrict,command="/usr/local/libexec/mission-control/ssh-dispatch.py"`. The root-owned dispatcher accepts only the three exact exporter paths in `SSH_ORIGINAL_COMMAND`, executes the root-owned copies without a shell, and rejects an interactive session or any other command. A bare `ssh <host>` is expected to fail for this key. Do not add an unrestricted personal key for the dashboard; keep this PC-local preview bound to localhost.
 
 #### 3. Pin the VPS host key
 
@@ -107,7 +113,7 @@ MC_EVIDENCE_SSH_TARGET=<observer-user>@<vps-host-or-ip>
 MC_EVIDENCE_SSH_REMOTE_SCRIPT=/home/<observer-user>/bin/export-mission-evidence.py
 ```
 
-Restart the server after changing variables. The evidence route requires the `user@host` target form. Test each exporter with its exact remote script path, then check both same-origin endpoints return HTTP 200; a bare SSH connection intentionally fails. The owner confirmed both PC-local endpoints returned 200 on the prior branch; this revised owner view still needs PC acceptance after pulling it.
+Restart the server after changing variables. The evidence and register routes require the `user@host` target form; the register route reuses `MC_EVIDENCE_SSH_TARGET` with its own fixed exporter command, so no new PC-side secret or target is needed. Test each exporter with its exact remote script path, then check all three same-origin endpoints; a bare SSH connection intentionally fails. The owner confirmed the agent/evidence PC-local endpoints returned 200 on the prior branch. The register route and revised owner view still need PC acceptance after pulling this revision.
 
 #### WSL2 on a Windows PC
 
@@ -146,7 +152,7 @@ The backend route and its connectors are documented separately (`docs/mission-co
 
 ## Security posture (required)
 
-This page reads data, but it lives inside the Control Hub shell. The shell's existing API routes include config writes, cron management, mission dispatch and file access, and they have **no authentication**. Anyone who can reach the port can call them. The new agents route also triggers an SSH connection to the VPS on every request.
+This page reads data, but it lives inside the Control Hub shell. The shell's existing API routes include config writes, cron management, mission dispatch and file access, and they have **no authentication**. Anyone who can reach the port can call them. The agents, evidence and owner-register routes also trigger bounded SSH reads from the VPS on every request.
 
 Required for any instance that sets `MC_AGENT_SSH_TARGET`:
 
@@ -160,10 +166,10 @@ Owner authentication and deny-by-default writes must exist before this page, or 
 
 ## Display rules (enforced in `freshness.ts` / `live-agents.ts` and tested)
 
-- **Source tags.** Every status row carries a `SourceTag` showing the source kind (`DEMO`, `NOT CONNECTED` or `LIVE`), the source name, and the freshness.
+- **Source tags.** Agent/evidence status rows carry `SourceTag` provenance; manual-register rows use `RegisterReadStatus` and `RegisterRowProvenance` so a successful Sheet read cannot be mistaken for an owner review.
 - **Bad timestamps.** If `checkedAt` is missing, unparsable or more than 30 s in the future, the row is **unknown**, never fresh.
 - **Stale rows.** If the age exceeds `staleAfterMinutes`, the row shows **STALE**. On the agent board a stale heartbeat replaces the headline state with `STALE`, and the previous value moves to "last reported: …". A stale agent never shows as idle.
-- **Missing data.** Panels without a source show NOT CONNECTED / unknown, never `0 open`, "none" or $0. Observed artifacts are never presented as deliverables.
+- **Missing data.** Panels without a source or before any successful register read show unknown/unavailable, never `0 open`, "none" or $0. A successful register read with no open rows says only "0 open decisions recorded in register." Observed artifacts are never presented as deliverables.
 - **No colour-only states.** Every state is written as text with an icon.
 
 ## Accessibility and mobile
@@ -181,6 +187,7 @@ Owner authentication and deny-by-default writes must exist before this page, or 
   - `freshness.ts`: pure freshness rules.
   - `live-agents.ts`: response validation, poll-state transitions, fetch helper and merge.
   - `live-evidence.ts`: UI-side copy of the evidence contract, validation, URL allowlist, poll state and display rules.
+  - `live-register.ts` and `RegisterStatus.tsx`: strict manual-register contract, poll state, owner-review status and rendering provenance.
   - `LiveEvidence.tsx`: evidence section.
   - `observed-snapshot.ts`: empty runtime snapshot (`mode: "observed"`).
   - `SourceCoverageBanner.tsx`: runtime data-source banner.
@@ -188,11 +195,11 @@ Owner authentication and deny-by-default writes must exist before this page, or 
   - `demo-fixture.ts`: synthetic fixture, for pure component tests only.
   - `MissionControlClient.tsx`: polling client.
   - `OwnerOverview.tsx` and the section components.
-- Tests: `tests/unit/mission-control-freshness.test.tsx`, `tests/unit/mission-control-owner-overview.test.tsx`, `tests/unit/mission-control-live-agents.test.tsx`, `tests/unit/mission-control-live-evidence.test.tsx`, `tests/unit/mission-control-observed-overview.test.tsx`.
+- Tests include `tests/unit/mission-control-owner-register.test.tsx`, `tests/unit/mission-control-owner-register.test.ts`, `tests/unit/mission-control-owner-register-route.test.ts` and `tests/unit/test_owner_register_exporter.py`, plus the existing overview, agent, evidence and freshness suites.
 
 ## What further adapters must supply
 
-On the runtime page, the owner inbox and project radar are NOT CONNECTED and the artifact shelf is not task-linked. Any future read-only adapter that fills them must follow these rules:
+The manual register now supplies decisions and project rows, but the artifact shelf is not task-linked and approval actions remain disconnected. Future adapters must follow these rules:
 
 1. **Provenance per datum.** Each item needs a `SourceStamp`:
    - `source`: a named system.
@@ -202,8 +209,8 @@ On the runtime page, the owner inbox and project radar are NOT CONNECTED and the
 
    A failed refresh keeps the previous `checkedAt`, so the row goes stale instead of being zeroed.
 2. **Agents.** Report availability separately from run state. Do not infer an assignment from a branch name or process name alone. A lost heartbeat must yield `unknown`/`interrupted`, never `succeeded` or `idle`.
-3. **Inbox.** Include the exact target, impact and `createdAt`. Approval actions stay absent until an authenticated backend binds approval to the exact payload and rejects changed payloads.
-4. **Projects.** Use `verification: "verified"` only when the state was read from a named source. A green CI result must not clear a release blocker.
+3. **Inbox.** The register records exact target, impact and raised-at for open decisions. Approval actions stay absent until an authenticated backend binds approval to the exact payload and rejects changed payloads.
+4. **Projects.** A manually owner-reviewed status is not independently verified by evidence sources. A green CI result must not clear a release blocker.
 5. **Deliverables.** Link each artifact to its task/project before calling it a deliverable. Until then the shelf stays "Observed artifacts".
 6. **Mode.** Set `mode: "live"` only when every panel is backed by a live adapter. The runtime snapshot stays `observed`, so the coverage banner remains.
 7. **Security gate first.** Owner authentication, deny-by-default writes and redaction come before any further connector. Never put secrets in a snapshot.

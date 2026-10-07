@@ -21,15 +21,16 @@ export const REGISTER_STALE_AFTER_MINUTES = 10;
 /** An owner review older than this renders OWNER REVIEW STALE. */
 export const OWNER_REVIEW_STALE_AFTER_DAYS = 7;
 
-const MAX_ROWS = 200;
-const MAX_SLUG = 100;
-const MAX_TITLE = 300;
-const MAX_TEXT = 1000;
-const MAX_URL = 2048;
+const MAX_DECISIONS = 100;
+const MAX_PROJECTS = 50;
+const MAX_SLUG = 64;
+const MAX_TITLE = 160;
+const MAX_TEXT = 200;
+const MAX_URL = 512;
 
 const PROJECT_STATES: readonly ProjectState[] = ["active", "paused", "idea", "unknown"];
 const SOURCE_HOSTS: readonly string[] = ["docs.google.com", "drive.google.com", "github.com"];
-const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SLUG = /^[a-z][a-z0-9_-]*$/;
 const SHEET_PATH = /^\/spreadsheets\/d\/[A-Za-z0-9_-]+\/edit$/;
 const SHEET_HASH = /^(#gid=\d+)?$/;
 
@@ -111,7 +112,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 }
 
 function isText(v: unknown, max: number): v is string {
-  return typeof v === "string" && v.trim().length > 0 && v.length <= max;
+  return typeof v === "string" && v.trim().length > 0 && isCell(v, max);
+}
+
+function isCell(v: unknown, max: number): v is string {
+  return typeof v === "string" && v.length <= max && !/[\x00-\x1f\x7f]/.test(v) && !/^\s*=/.test(v);
 }
 
 function isSlug(v: unknown): v is string {
@@ -144,7 +149,10 @@ export function safeSheetUrl(raw: string): string | null {
 /** A row's source link: https Google Docs/Drive or GitHub only. */
 export function safeRegisterSourceUrl(raw: string): string | null {
   const url = parseUrl(raw);
-  if (!url || !SOURCE_HOSTS.includes(url.hostname.toLowerCase())) return null;
+  if (!url || !SOURCE_HOSTS.includes(url.hostname.toLowerCase()) || url.search || url.hash) return null;
+  if (url.hostname === "docs.google.com" && !/^\/(?:document|spreadsheets)\/d\/[A-Za-z0-9_-]+\/edit$/.test(url.pathname)) return null;
+  if (url.hostname === "drive.google.com" && !/^\/file\/d\/[A-Za-z0-9_-]+\/view$/.test(url.pathname)) return null;
+  if (url.hostname === "github.com" && !/^\/brettjub\/PatterStage\/(?:issues|pull)\/[1-9][0-9]*$/.test(url.pathname)) return null;
   return url.href;
 }
 
@@ -165,7 +173,7 @@ function parseDecision(raw: unknown): RegisterDecision | null {
   if (!isRecord(raw) || !onlyKeys(raw, DECISION_KEYS)) return null;
   const { id, projectId, title, target, impact, raisedAt } = raw;
   if (!isSlug(id) || !isSlug(projectId)) return null;
-  if (!isText(title, MAX_TITLE) || !isText(target, MAX_TEXT) || !isText(impact, MAX_TEXT)) return null;
+  if (!isText(title, MAX_TITLE) || !isText(target, MAX_TEXT) || !isCell(impact, MAX_TEXT)) return null;
   if (!isIsoUtc(raisedAt)) return null;
   const source = parseRowSource(raw);
   if (!source) return null;
@@ -175,12 +183,13 @@ function parseDecision(raw: unknown): RegisterDecision | null {
 function parseProject(raw: unknown): RegisterProject | null {
   if (!isRecord(raw) || !onlyKeys(raw, PROJECT_KEYS)) return null;
   const { id, name, outcome, recordedState, position, blocker, nextMove } = raw;
-  if (!isSlug(id) || !isText(name, MAX_TITLE) || !isText(outcome, MAX_TEXT)) return null;
+  if (!isSlug(id) || !isText(name, MAX_TITLE) || !isCell(outcome, MAX_TEXT)) return null;
   if (typeof recordedState !== "string" || !PROJECT_STATES.includes(recordedState as ProjectState)) return null;
-  if (!isText(position, MAX_TEXT) || !isText(nextMove, MAX_TEXT)) return null;
-  if (blocker !== undefined && !isText(blocker, MAX_TEXT)) return null;
+  if (!isCell(position, MAX_TEXT) || !isCell(nextMove, MAX_TEXT)) return null;
+  if (blocker !== undefined && !isCell(blocker, MAX_TEXT)) return null;
   const source = parseRowSource(raw);
   if (!source) return null;
+  if (recordedState !== "unknown" && !source.ownerReviewedAt) return null;
   return {
     id,
     name,
@@ -196,9 +205,10 @@ function parseProject(raw: unknown): RegisterProject | null {
 function parseRows<T extends { id: string }>(
   raw: unknown,
   label: string,
-  parse: (r: unknown) => T | null
+  parse: (r: unknown) => T | null,
+  cap: number
 ): T[] | string {
-  if (!Array.isArray(raw) || raw.length > MAX_ROWS) return label;
+  if (!Array.isArray(raw) || raw.length > cap) return label;
   const rows: T[] = [];
   const ids = new Set<string>();
   for (const r of raw) {
@@ -222,10 +232,12 @@ export function parseRegisterResponse(body: unknown): RegisterParseResult {
   if (body.schemaVersion !== 1) return { ok: false, error: "Invalid response: unsupported schemaVersion" };
   if (!isIsoUtc(body.checkedAt)) return { ok: false, error: "Invalid response: checkedAt" };
   if (typeof body.sheetUrl !== "string") return { ok: false, error: "Invalid response: sheetUrl" };
-  const decisions = parseRows(body.decisions, "decision", parseDecision);
+  const decisions = parseRows(body.decisions, "decision", parseDecision, MAX_DECISIONS);
   if (typeof decisions === "string") return { ok: false, error: `Invalid response: ${decisions}` };
-  const projects = parseRows(body.projects, "project", parseProject);
+  const projects = parseRows(body.projects, "project", parseProject, MAX_PROJECTS);
   if (typeof projects === "string") return { ok: false, error: `Invalid response: ${projects}` };
+  const projectIds = new Set(projects.map((p) => p.id));
+  if (decisions.some((d) => !projectIds.has(d.projectId))) return { ok: false, error: "Invalid response: decision missing project" };
   const sheetUrl = safeSheetUrl(body.sheetUrl);
   return {
     ok: true,
