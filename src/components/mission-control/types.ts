@@ -2,9 +2,10 @@
 // Mission Control — Owner Overview data contract
 // ═══════════════════════════════════════════════════════════════
 // Shape a read-only adapter must supply. Agents may come from the
-// live process observation route (see `live-agents.ts`); every other
-// value comes from the synthetic `demo-fixture.ts`. Nothing is read
-// from SQLite, GitHub, Drive or any business system.
+// live process observation route (see `live-agents.ts`). At runtime
+// (`observed` mode) every other panel is empty: inbox and projects have
+// no source and render NOT CONNECTED. `demo-fixture.ts` fills them only
+// for pure component tests.
 // See docs/mission-control-owner-overview.md.
 
 /** Where a datum came from. Only `live` may ever be presented as current. */
@@ -109,11 +110,13 @@ export interface RiskEntry {
 
 export interface OwnerOverviewSnapshot {
   /**
-   * `demo`: every panel is fixture data. `mixed`: some panel (today only the agent
-   * board) carries a live observation; the rest is still demo. `live` is reserved for
-   * a future where every panel has a verified adapter — nothing sets it today.
+   * `demo`: every panel is fixture data (pure tests only). `mixed`: a demo snapshot
+   * with a live agent or evidence observation merged in (pure tests only).
+   * `observed`: the runtime page — only route observations, no fixture records;
+   * panels without a source render NOT CONNECTED. `live` is reserved for a future
+   * where every panel has a verified adapter — nothing sets it today.
    */
-  mode: "demo" | "mixed" | "live";
+  mode: "demo" | "mixed" | "observed" | "live";
   generatedAt: string;
   inbox: OwnerInboxItem[];
   agents: AgentBoardEntry[];

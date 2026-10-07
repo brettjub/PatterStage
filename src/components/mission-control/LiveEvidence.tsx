@@ -1,9 +1,11 @@
 // ═══════════════════════════════════════════════════════════════
 // Live evidence — read-only Hermes / GitHub / Drive observations
 // ═══════════════════════════════════════════════════════════════
-// A separate section from the demo panels: evidence listed here does
+// A separate section from the other panels: evidence listed here does
 // not make any project, inbox item or radar row live. Each source
 // shows its own status, so "unavailable" never reads as zero or idle.
+// The item row, state chip and freshness line are reused by the
+// Observed artifacts shelf.
 
 import { ExternalLink, FileSearch } from "lucide-react";
 import Section from "./Section";
@@ -48,7 +50,7 @@ const KIND_LABEL: Record<EvidenceItemKind, string> = {
   document: "Document",
 };
 
-const DISPLAY_CHIP: Record<EvidenceSourceDisplay, { text: string; classes: string }> = {
+export const DISPLAY_CHIP: Record<EvidenceSourceDisplay, { text: string; classes: string }> = {
   live: { text: "LIVE", classes: "border-semantic-success/40 text-semantic-success" },
   held: { text: "HELD — LAST POLL FAILED", classes: "border-semantic-warning/50 border-dashed text-semantic-warning" },
   stale: { text: "STALE", classes: "border-semantic-warning/50 border-dashed text-semantic-warning" },
@@ -80,7 +82,7 @@ function EmptyText({ display, source }: { display: EvidenceSourceDisplay; source
   return <>The last successful check returned 0 items.</>;
 }
 
-function ItemRow({ item, sourceId, nowMs }: { item: EvidenceItem; sourceId: EvidenceSourceId; nowMs: number }) {
+export function ItemRow({ item, sourceId, nowMs }: { item: EvidenceItem; sourceId: EvidenceSourceId; nowMs: number }) {
   const age = evidenceAgeMinutes(item.observedAt, nowMs);
   return (
     <li className="rounded-md border border-white/10 p-2 min-w-0" data-testid="mc-evidence-item" data-kind={item.kind}>
@@ -133,10 +135,52 @@ function ItemRow({ item, sourceId, nowMs }: { item: EvidenceItem; sourceId: Evid
   );
 }
 
+export function SourceStateChip({ display }: { display: EvidenceSourceDisplay }) {
+  const chip = DISPLAY_CHIP[display];
+  return (
+    <span
+      className={`rounded border px-1.5 py-0.5 text-[11px] font-mono font-semibold ${chip.classes}`}
+      data-testid="mc-evidence-source-state"
+    >
+      {chip.text}
+    </span>
+  );
+}
+
+/** Last-success line for one source; an unavailable source never reads as current. */
+export function SourceFreshness({
+  source,
+  display,
+  nowMs,
+}: {
+  source: EvidenceSource | undefined;
+  display: EvidenceSourceDisplay;
+  nowMs: number;
+}) {
+  return (
+    <p className="mt-1 text-[11px] font-mono text-white/60" data-testid="mc-evidence-source-checked">
+      <span className="sr-only">Freshness: </span>
+      {source?.status === "unavailable" ? (
+        <span>
+          Unavailable at the last poll
+          {source.checkedAt ? (
+            <>
+              {" "}· last success <Checked iso={source.checkedAt} nowMs={nowMs} stale={false} />
+            </>
+          ) : (
+            " · no successful check on record"
+          )}
+        </span>
+      ) : (
+        <Checked iso={source?.checkedAt ?? null} nowMs={nowMs} stale={display === "stale"} />
+      )}
+    </p>
+  );
+}
+
 function SourceCard({ id, live, nowMs }: { id: EvidenceSourceId; live: LiveEvidenceState; nowMs: number }) {
   const source = live.observation?.sources.find((s) => s.id === id);
   const display = evidenceSourceDisplay(source, live.connector, nowMs);
-  const chip = DISPLAY_CHIP[display];
   const copy = SOURCE_COPY[id];
   const headingId = `mc-evidence-${id}-heading`;
 
@@ -152,31 +196,10 @@ function SourceCard({ id, live, nowMs }: { id: EvidenceSourceId; live: LiveEvide
         <h3 id={headingId} className="text-sm font-semibold text-white">
           {copy.name}
         </h3>
-        <span
-          className={`rounded border px-1.5 py-0.5 text-[11px] font-mono font-semibold ${chip.classes}`}
-          data-testid="mc-evidence-source-state"
-        >
-          {chip.text}
-        </span>
+        <SourceStateChip display={display} />
       </div>
       <p className="mt-1 text-xs text-white/60">{copy.scope}</p>
-      <p className="mt-1 text-[11px] font-mono text-white/60" data-testid="mc-evidence-source-checked">
-        <span className="sr-only">Freshness: </span>
-        {source?.status === "unavailable" ? (
-          <span>
-            Unavailable at the last poll
-            {source.checkedAt ? (
-              <>
-                {" "}· last success <Checked iso={source.checkedAt} nowMs={nowMs} stale={false} />
-              </>
-            ) : (
-              " · no successful check on record"
-            )}
-          </span>
-        ) : (
-          <Checked iso={source?.checkedAt ?? null} nowMs={nowMs} stale={display === "stale"} />
-        )}
-      </p>
+      <SourceFreshness source={source} display={display} nowMs={nowMs} />
       {source && source.items.length > 0 ? (
         <ul className="mt-2 space-y-2" aria-label={`${copy.name} evidence`}>
           {source.items.map((item) => (
@@ -222,13 +245,23 @@ function ConnectorLine({ live, nowMs }: { live: LiveEvidenceState; nowMs: number
   );
 }
 
-export default function LiveEvidence({ live, nowMs }: { live: LiveEvidenceState; nowMs: number }) {
+export default function LiveEvidence({
+  live,
+  nowMs,
+  observedMode = false,
+}: {
+  live: LiveEvidenceState;
+  nowMs: number;
+  /** Runtime page: no demo panels exist, so the description must not mention them. */
+  observedMode?: boolean;
+}) {
+  const separateFrom = observedMode ? "separate from the other panels" : "separate from the demo panels";
   return (
     <Section
       id="live-evidence"
       title="Live evidence"
       icon={FileSearch}
-      description={`Read-only observations from ${EVIDENCE_ROUTE}, separate from the demo panels. Evidence here does not make any inbox item or project live. Sources go STALE ${EVIDENCE_STALE_AFTER_MINUTES} minutes after their last successful check.`}
+      description={`Read-only observations from ${EVIDENCE_ROUTE}, ${separateFrom}. Evidence here does not make any inbox item or project live. Sources go STALE ${EVIDENCE_STALE_AFTER_MINUTES} minutes after their last successful check.`}
     >
       <ConnectorLine live={live} nowMs={nowMs} />
       <ul className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3" aria-label="Evidence sources">

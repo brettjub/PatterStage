@@ -14,10 +14,8 @@ import {
   displayedAgentState,
   RUN_STATE_LABEL,
 } from "./freshness";
-import { LIVE_AGENTS_ROUTE, type LiveAgentsState } from "./live-agents";
+import { LIVE_AGENTS_ROUTE, LIVE_STALE_AFTER_MINUTES, type LiveAgentsState } from "./live-agents";
 import type { AgentBoardEntry, SourceStamp } from "./types";
-
-const LIVE_STALE_AFTER_MINUTES = 1;
 
 function ConnectorStatus({ live, nowMs }: { live: LiveAgentsState; nowMs: number }) {
   const { observation, connector, lastError } = live;

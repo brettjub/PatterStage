@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
-// Mission Control — Owner Overview (read-only, mostly DEMO)
+// Mission Control — Owner Overview (read-only, observed data only)
 // ═══════════════════════════════════════════════════════════════
-// Synthetic fixture data plus optional live agent process and
-// evidence observations; does not replace the `/` dashboard.
+// Live agent process and evidence observations only; panels with no
+// source show NOT CONNECTED. Does not replace the `/` dashboard.
 // See docs/mission-control-owner-overview.md.
 
 import type { Metadata } from "next";
@@ -12,8 +12,8 @@ import PageHeader from "@/components/layout/PageHeader";
 import MissionControlClient from "@/components/mission-control/MissionControlClient";
 
 export const metadata: Metadata = {
-  title: "Mission Control (demo) | Control Hub",
-  description: "Read-only owner overview: synthetic demo data plus optional live agent process and evidence observations.",
+  title: "Mission Control | Control Hub",
+  description: "Read-only owner overview: observed agent process and evidence data only; partial coverage.",
 };
 
 export default function MissionControlPage() {
@@ -22,14 +22,14 @@ export default function MissionControlPage() {
       <PageHeader
         icon={Radar}
         title="Mission Control"
-        subtitle="Owner overview · read-only · demo data + live observations"
+        subtitle="Owner overview · read-only · observed sources only"
         color="purple"
         actions={
           <span
             className="rounded border border-semantic-warning/50 px-2 py-1 text-xs font-mono font-semibold text-semantic-warning"
-            data-testid="mc-header-demo-badge"
+            data-testid="mc-header-coverage-badge"
           >
-            DEMO DATA · PAGE NOT LIVE
+            OBSERVED DATA ONLY · NOT FULLY CONNECTED
           </span>
         }
       />

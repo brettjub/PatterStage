@@ -15,7 +15,31 @@ const PROJECT_STATE_LABEL: Record<ProjectState, string> = {
   unknown: "Unknown",
 };
 
-export default function ProjectRadar({ projects, nowMs }: { projects: ProjectRadarEntry[]; nowMs: number }) {
+export default function ProjectRadar({
+  projects,
+  nowMs,
+  notConnected = false,
+}: {
+  projects: ProjectRadarEntry[];
+  nowMs: number;
+  /** No authoritative project source exists: show NOT CONNECTED, never project cards. */
+  notConnected?: boolean;
+}) {
+  if (notConnected) {
+    return (
+      <Section
+        id="project-radar"
+        title="Project radar"
+        icon={FolderKanban}
+        description="Recorded project positions, once a project source exists."
+      >
+        <p className="rounded-lg border border-dashed border-white/20 p-3 text-sm text-white/70" data-testid="mc-radar-not-connected">
+          NOT CONNECTED — no authoritative project source exists yet. Project states, blockers and release gates are
+          unknown. Evidence below does not stand in for a project status.
+        </p>
+      </Section>
+    );
+  }
   return (
     <Section
       id="project-radar"

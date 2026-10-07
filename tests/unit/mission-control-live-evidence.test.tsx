@@ -462,9 +462,10 @@ describe("MissionControlClient — independent evidence polling", () => {
     expect(agentsMock.mock.calls[0][0]).toBe(LIVE_AGENTS_ROUTE);
     expect(screen.getByTestId("mc-evidence-connector").dataset.connector).toBe("connected");
     expect(sourceCard("github").dataset.display).toBe("live");
-    // A failing agent connector does not affect evidence, and evidence makes the page mixed.
+    // A failing agent connector does not affect evidence; the runtime page is observed-only, never demo/mixed.
     expect(screen.getByTestId("mc-agent-connector-status")).toHaveTextContent("NOT CONNECTED");
-    expect(screen.getByTestId("mc-demo-banner").dataset.mode).toBe("mixed");
+    expect(screen.queryByTestId("mc-demo-banner")).toBeNull();
+    expect(screen.getByTestId("mc-source-banner").dataset.coverage).toBe("partial");
 
     await act(async () => {
       jest.advanceTimersByTime(EVIDENCE_POLL_MS);

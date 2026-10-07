@@ -2,12 +2,17 @@
 
 **Route:** `/mission-control` (sidebar: Main → Mission Control). The existing dashboard at `/` is unchanged.
 
-**Status: mostly DEMO. The page is never LIVE as a whole.**
+**Status: OBSERVED DATA ONLY, partial coverage. The page shows no demo or fixture data and is never LIVE as a whole.**
+
+The runtime page uses an explicit `observed` snapshot mode (`observed-snapshot.ts`). It is neither "demo" nor "fully live": it starts with no records and shows only what the two same-origin, read-only routes return.
 
 - **Agent board.** Can show live data. It polls the same-origin route `GET /api/mission-control/agents`, which shows which agent processes a VPS exporter observed. The browser never contacts the VPS.
 - **Live evidence.** Can show live data. It polls the same-origin route `GET /api/mission-control/evidence` on its own loop and lists Hermes task/run records, GitHub PR state/checks and Drive file metadata per source. It is a separate section: evidence never makes an inbox item or project live. See [Live evidence section](#live-evidence-section-ui).
-- **Owner inbox, Project radar, Deliverables & risks.** These panels show **synthetic demo data**. None of it describes a real project, person, decision or business system.
+- **Observed artifacts.** Lists the Drive files and GitHub PRs from the same evidence observation, labelled as **observed artifacts**: not completed deliverables and not linked to any task. See [Observed artifacts shelf](#observed-artifacts-shelf).
+- **Owner inbox, Project radar.** No authoritative source exists yet, so both show **NOT CONNECTED — unknown** with no records. They never show `0 open`, `none` or project cards.
+- **No fabricated content.** No project statuses, approvals, costs, release gates or assignments are shown.
 - **No action controls.** The page has no dispatch, cancel, approve, save or send controls.
+- **Demo fixture.** `demo-fixture.ts` remains only so the pure `OwnerOverview` component can be tested in `demo`/`mixed` mode. `MissionControlClient` and the route never import it (a unit test checks this).
 
 > **Security: read this before running it.** See [Security posture](#security-posture-required). The Control Hub shell around this page exposes powerful **unauthenticated** API routes. Run it on localhost only, with an isolated `HERMES_HOME` and `CH_DATA_DIR`, and never expose it publicly.
 
@@ -15,19 +20,29 @@
 
 | Panel | Purpose | Content |
 |-------|---------|---------|
-| Banner + header badge | Persistent data-source notice | `DEMO · NOT CONNECTED · NOT LIVE` until a successful agent poll or an evidence poll with a live source. After that, `MIXED · … · PAGE NOT LIVE`, naming which sections carry live observations. |
-| One-minute view | Open items, agent state counts, biggest recorded blocker, freshness count | Computed at render time. "N live sources" counts only live stamps that are still fresh, plus evidence sources that are fresh **and** came from a successful poll. |
-| Owner inbox | Decisions and approvals, oldest first; items older than 3 days are flagged | Synthetic "Example decision…" rows plus one simulated approval row |
-| Live evidence | Hermes / GitHub / Drive sources, each with its own LIVE, HELD, STALE, UNAVAILABLE or UNKNOWN state | Rendered only by the polling client. Before the first successful poll every source is UNKNOWN. |
+| Banner + header badge | Persistent data-source notice (`SourceCoverageBanner`) | Names the state of each source (agent processes; Hermes schedule, GitHub PRs, Drive files) and says owner inbox and project radar are NOT CONNECTED. Title: `OBSERVED DATA ONLY · PARTIAL COVERAGE …` when any source is live; `… NO CURRENT SOURCE …` when only held/stale observations remain; `CONNECTING · STATE UNKNOWN` before the first polls settle; `NOT CONNECTED · STATE UNKNOWN` when nothing has been observed. Never says demo, never says the page is live. |
+| One-minute view | Owner inbox, agent state counts, biggest recorded blocker, freshness | Inbox: `NOT CONNECTED — unknown`. Blocker: `UNKNOWN — no project source connected`. Freshness: `N of 4 observed sources live · M not currently live (unknown, unavailable, held or stale) · 2 panels not connected` (the agents route plus three evidence sources; only fresh observations from a successful poll count as live). |
+| Owner inbox | Decisions and approvals | NOT CONNECTED — no authoritative source; no records. |
 | Agent board | **LIVE VPS AGENT PROCESS OBSERVATION**: connector status, source, checked-at, and one row per observed process | Live data when connected. Before the first successful poll there are no rows; the board shows NOT CONNECTED / unknown. |
-| Project radar | Recorded state, position, blocker and next move | Synthetic "Example project …" rows, all **UNVERIFIED** with no successful check on record |
-| Deliverables & risks | Evidence-shelf placeholder and risk list | Deliverables: *not connected* (empty). Risks: stale/unchecked count, "business panels are demo only", "spend unavailable (not $0)". |
+| Live evidence | Hermes / GitHub / Drive sources, each with its own LIVE, HELD, STALE, UNAVAILABLE or UNKNOWN state | Before the first successful poll every source is UNKNOWN. |
+| Project radar | Recorded project positions | NOT CONNECTED — no authoritative source; no project cards. |
+| Observed artifacts | Drive files and GitHub PRs from the evidence observation | Per-source state chip and last-success time; items keep their own source timestamps. See below. |
 
-### What is demo, exactly
+### Demo fixture (tests only)
 
-- **Every inbox, project and deliverable/risk row is synthetic.** Names start with "Example" or "Simulated". There are no KPIs, prices, counts, schedules or connector states, and a unit test fails if fixture names stop being generic or if a currency amount is added.
-- **Demo timestamps are simulated** relative to the browser clock on page load and are labelled "simulated" in every source tag.
-- **Fixture agents (`Demo agent A–E`) are never shown on the page.** They remain in `demo-fixture.ts` so the pure `OwnerOverview` component (and its tests) can exercise every availability/run state. Next to a live connector, the board shows the live observation or nothing.
+- **Not used at runtime.** `/mission-control` renders `MissionControlClient`, which starts from `buildObservedSnapshot()` and never calls `buildDemoSnapshot()`. The demo banner, "Example" project rows, simulated inbox rows and demo risks therefore never appear on the page.
+- **Kept for pure component tests.** `OwnerOverview` still renders a `demo` or `mixed` snapshot, so tests can exercise every availability/run state, inbox sorting and the demo labelling. Fixture names stay generic ("Example", "Simulated", "Demo agent"), and a unit test fails if a currency amount is added.
+
+## Observed artifacts shelf
+
+- **Source.** The Drive and GitHub sources of the same `GET /api/mission-control/evidence` observation that feeds Live evidence. No extra route, poll or contract.
+- **Labelling.** "Observed artifacts — not completed deliverables, and not linked to any task, project status or approval." Drive is metadata only (direct children of the selected folder); GitHub is PR state only, and a green check is not a merge, deploy or release approval.
+- **States.** Each source shows LIVE, HELD — LAST POLL FAILED, STALE, UNAVAILABLE or UNKNOWN with its last successful check:
+  - **Live, 0 items:** "Source live — this bounded query returned 0 items." (expected for GitHub when there are no recent PRs).
+  - **Held or stale:** previously observed items stay listed with their timestamps; never shown as LIVE, never reset to zero.
+  - **Unavailable:** "could not be read. This is not zero."
+  - **Unknown:** "Not connected — state unknown."
+- **Links.** Only URLs that already passed `safeEvidenceUrl` at the client boundary (https, no credentials/port, allowlisted host per source) are linked, with `target="_blank" rel="noopener noreferrer"`. Others show "Link withheld".
 
 ## Live agent process observation
 
@@ -42,7 +57,7 @@
 
 - **Polling.** Sequential `fetch` with `cache: "no-store"` every **20 s**. The next poll is scheduled only after the previous one settles. Each request has a 15 s timeout. An `AbortController` cancels the in-flight request and the timer on unmount.
 - **Validation.** The response shape is checked strictly: `schemaVersion === 1`, valid ISO times, non-empty strings, a known `availability`, `run === null`, `stamp.kind === "live"`, a finite `staleAfterMinutes`, unique ids, and at most 200 agents. One malformed agent rejects the whole response, which then counts as a failed poll. A partial board could silently hide a process.
-- **On success.** Only `snapshot.agents` is replaced. `snapshot.mode` becomes `"mixed"`, never `"live"`.
+- **On success.** Only `snapshot.agents` is replaced. The runtime snapshot stays `"observed"`; a demo snapshot in tests becomes `"mixed"`. Never `"live"`.
 - **On failure (503, network error, timeout, bad JSON, invalid shape).** The previous successful observation and its `checkedAt` are kept unchanged. The board shows **CONNECTOR UNAVAILABLE (reason)** together with the age of the held observation. If no poll has ever succeeded, it shows **NOT CONNECTED** with no rows and "agent states unknown", never invented process states.
 - **Clock.** The clock re-renders every 15 s regardless of poll results. With `staleAfterMinutes: 1`, held evidence shows **STALE** once it is two whole minutes old. A remote clock up to 30 s ahead of the browser counts as "just now"; anything further ahead counts as unknown.
 - **Assignments are not claimed.** A process scan cannot see tasks. Live rows show run state as "Not observed — process scan cannot see assignments", never "No run assigned".
@@ -51,28 +66,15 @@
 
 The PC runs Control Hub. The route on the PC opens an SSH connection to the VPS and runs a read-only exporter script there. The browser only ever talks to the PC on localhost.
 
-#### 1. Deploy the exporter script on the VPS
+#### 1. Deploy the two read-only exporters on the VPS
 
-The exporter script ships at `scripts/mission-control/export-agent-snapshot.py`. The route requires a configured absolute path to the copied VPS script.
+The agent and evidence exporters ship at `scripts/mission-control/export-agent-snapshot.py` and `scripts/mission-control/export-mission-evidence.py`. The routes require configured absolute VPS paths. The current VPS installation accepts the two corresponding `/home/brettjubinville/bin/` paths but dispatches the dedicated SSH key to root-owned copies under `/usr/local/libexec/mission-control/`. Never take an exporter command or path from a browser request.
 
-1. Copy it to the VPS as a **non-root user** at a path that user owns, such as `~/bin/export-agent-snapshot.py`. Then run `chmod 755` on it. A dedicated observer account is preferable if it has the needed process visibility; to read an existing Hermes coordinator schedule, the SSH account must have permission to read that account's `~/.hermes/cron/jobs.json` (the exporter never prints its contents).
-2. Confirm that it only *reads* the process table and prints the JSON the route expects. It must not start, stop or signal processes, and must not read secrets or environment variables of other processes.
-3. Run it once by hand on the VPS and inspect the output before connecting anything. The optional coordinator row appears only when the VPS exporter has `MC_COORDINATOR_JOB_ID` set locally or reads a job ID from `~/.config/mission-control/coordinator-id` (mode 0600); keep the real ID out of this public repo and the PC's environment.
+The agent exporter observes process identities; the evidence exporter reads only the selected Hermes schedule/run, public PatterStage PR metadata and selected-folder Drive metadata. Neither provides approval or project-status authority. An optional Hermes coordinator ID is stored only in the VPS-local protected selector; do not put it in the repository or PC environment. Keep the Launchhost coordinator paused.
 
-#### 2. Create a dedicated SSH key on the PC and restrict it on the VPS
+#### 2. Restrict a dedicated SSH key
 
-```bash
-# On the PC (inside WSL2 if you use it — see below)
-ssh-keygen -t ed25519 -f ~/.ssh/mc_observer -C "mission-control observer" -N ""
-```
-
-Add the public key to the VPS user's `~/.ssh/authorized_keys` with a **forced command**, so the key can run nothing except the exporter:
-
-```text
-restrict,command="/home/mc-observer/bin/<exporter-script>" ssh-ed25519 AAAA... mission-control observer
-```
-
-With a forced command, the VPS ignores whatever command the client sends. Keep `MC_AGENT_SSH_REMOTE_SCRIPT` equal to the same path anyway, so the configuration documents itself.
+Generate a dedicated ED25519 key in WSL (the current preview uses `~/.ssh/patterstage_mc`); the private key never leaves the PC. Authorize its **public** key on the VPS with `restrict,command="/usr/local/libexec/mission-control/ssh-dispatch.py"`. The root-owned dispatcher accepts only the two exact exporter paths in `SSH_ORIGINAL_COMMAND`, executes the root-owned copies without a shell, and rejects an interactive session or any other command. A bare `ssh <host>` is expected to fail for this key. Do not add an unrestricted personal key for the dashboard; keep this PC-local preview bound to localhost.
 
 #### 3. Pin the VPS host key
 
@@ -81,52 +83,49 @@ The connection is non-interactive, so an unknown or changed host key must make i
 1. Get the fingerprint **out-of-band** from the VPS itself (provider console or an existing trusted session):
    `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`
 2. On the PC, fetch the key with `ssh-keyscan -t ed25519 <vps-host>` and compare it to that fingerprint (`ssh-keygen -lf <(ssh-keyscan -t ed25519 <vps-host> 2>/dev/null)`). Append it to `~/.ssh/known_hosts` only if the fingerprints match.
-3. Use an SSH config alias with strict settings:
+3. Put the dedicated key first in WSL `~/.ssh/config` (before `Host *`), matching the literal VPS host used by both routes:
 
 ```text
-# ~/.ssh/config on the PC
-Host mc-vps
-  HostName <vps-host-or-ip>
-  User mc-observer
-  IdentityFile ~/.ssh/mc_observer
+Host <vps-host-or-ip>
+  User <observer-user>
+  IdentityFile ~/.ssh/patterstage_mc
   IdentitiesOnly yes
   StrictHostKeyChecking yes
   BatchMode yes
-  ConnectTimeout 10
 ```
 
-If the VPS is rebuilt and its host key changes, polls will fail (the page shows CONNECTOR UNAVAILABLE). Re-verify the fingerprint before you replace the entry. Never set `StrictHostKeyChecking no`.
+If the VPS is rebuilt and its host key changes, polls fail closed. Re-verify the fingerprint before changing `known_hosts`; never set `StrictHostKeyChecking no`.
 
 #### 4. Configure Control Hub on the PC
 
-Add to `.env.local`. Do not hardcode a VPS host anywhere in the repo:
+Set these **server-process** variables in WSL before starting `npm run dev`; keep the host/account in local configuration, not this repository:
 
-```bash
-MC_AGENT_SSH_TARGET=mc-vps                                   # SSH alias (or user@host) from ~/.ssh/config
-MC_AGENT_SSH_REMOTE_SCRIPT=/home/mc-observer/bin/export-agent-snapshot.py  # absolute path on the VPS
+```text
+MC_AGENT_SSH_TARGET=<observer-user>@<vps-host-or-ip>
+MC_AGENT_SSH_REMOTE_SCRIPT=/home/<observer-user>/bin/export-agent-snapshot.py
+MC_EVIDENCE_SSH_TARGET=<observer-user>@<vps-host-or-ip>
+MC_EVIDENCE_SSH_REMOTE_SCRIPT=/home/<observer-user>/bin/export-mission-evidence.py
 ```
 
-Restart the server. If either variable is unset, the route answers 503, and the page shows NOT CONNECTED. See `docs/mission-control-agent-snapshot.md` for the server-side behavior.
-
-Check the SSH leg by hand first: `ssh mc-vps` should print the exporter's JSON and exit.
+Restart the server after changing variables. The evidence route requires the `user@host` target form. Test each exporter with its exact remote script path, then check both same-origin endpoints return HTTP 200; a bare SSH connection intentionally fails. The owner confirmed both PC-local endpoints returned 200 on the prior branch; this revised owner view still needs PC acceptance after pulling it.
 
 #### WSL2 on a Windows PC
 
 - **Run everything inside the WSL2 distro.** That includes Control Hub (`npm run dev` / `next start`), the SSH key and `~/.ssh/config`. The route spawns WSL's OpenSSH, which reads WSL's `~/.ssh`, not `%USERPROFILE%\.ssh` on Windows.
-- **Keep keys on the Linux filesystem**, not under `/mnt/c/...`. DrvFs does not enforce Unix permissions, and OpenSSH refuses private keys it considers too open. Use `chmod 700 ~/.ssh` and `chmod 600 ~/.ssh/mc_observer ~/.ssh/config`.
+- **Keep keys on the Linux filesystem**, not under `/mnt/c/...`. DrvFs does not enforce Unix permissions, and OpenSSH refuses private keys it considers too open. Use `chmod 700 ~/.ssh` and `chmod 600 ~/.ssh/patterstage_mc ~/.ssh/config`.
 - **Browse from Windows to `http://localhost:<PORT>`.** WSL2 forwards localhost from Windows to a server bound to `127.0.0.1` inside the distro, so there is no need to bind `0.0.0.0`.
 - **Watch for mirrored networking.** If WSL2 *mirrored* networking mode is enabled, a `0.0.0.0` bind inside WSL is reachable from the LAN. That is one more reason to bind `127.0.0.1`.
 
 #### First-run database
 
-Before starting `npm run dev`, initialize the **same isolated `CH_DATA_DIR`** that the app will use:
+Before starting `npm run dev`, initialize the **same isolated `CH_DATA_DIR`** used by the PC preview. The current preview uses `data-v2`; keep the earlier directory untouched:
 
 ```bash
-mkdir -p "$HOME/.patterstage-preview/hermes" "$HOME/.patterstage-preview/data"
-CH_DATA_DIR="$HOME/.patterstage-preview/data" npm run db:migrate
+mkdir -p "$HOME/.patterstage-preview/hermes" "$HOME/.patterstage-preview/data-v2"
+CH_DATA_DIR="$HOME/.patterstage-preview/data-v2" CONTROL_HUB_DATA_DIR="$HOME/.patterstage-preview/data-v2" npm run db:migrate
 ```
 
-If a previous run created a partial database (errors such as `no such table: sessions`), stop the app and use a **new** isolated directory (for example `data-v2`) for both `db:migrate` and the app. Do not delete the old directory; it may contain data worth preserving. A fresh development run now applies the baseline and incremental migrations automatically, but an already-partial database must not be silently treated as healthy.
+Use `data-v2` for both migration and runtime. Do not delete the earlier directory; it may contain data worth preserving. A fresh development run applies baseline and incremental migrations automatically, but an already-partial database must not be silently treated as healthy.
 
 ## Live evidence section (UI)
 
@@ -164,14 +163,14 @@ Owner authentication and deny-by-default writes must exist before this page, or 
 - **Source tags.** Every status row carries a `SourceTag` showing the source kind (`DEMO`, `NOT CONNECTED` or `LIVE`), the source name, and the freshness.
 - **Bad timestamps.** If `checkedAt` is missing, unparsable or more than 30 s in the future, the row is **unknown**, never fresh.
 - **Stale rows.** If the age exceeds `staleAfterMinutes`, the row shows **STALE**. On the agent board a stale heartbeat replaces the headline state with `STALE`, and the previous value moves to "last reported: …". A stale agent never shows as idle.
-- **Missing data.** Missing usage shows as unavailable, never `$0`. Missing deliverables show as not connected, never "none delivered".
+- **Missing data.** Panels without a source show NOT CONNECTED / unknown, never `0 open`, "none" or $0. Observed artifacts are never presented as deliverables.
 - **No colour-only states.** Every state is written as text with an icon.
 
 ## Accessibility and mobile
 
 - **Layout.** Single column by default; the `sm:`/`md:` breakpoints add columns.
 - **Jump nav.** `<nav aria-label="Owner overview sections">` with 44px touch targets. Each target is a `<section tabindex="-1" aria-labelledby>` with an `h2`, so it can take keyboard focus.
-- **Reading order.** Summary → Owner inbox → agents → live evidence → projects → deliverables & risks.
+- **Reading order.** Summary → Owner inbox → agents → live evidence → projects → observed artifacts (demo/test snapshots end with deliverables & risks instead).
 - **Tokens.** Theme tokens only (`neon-*`, `semantic-*`, `dark-*`); no raw hex values.
 
 ## Files
@@ -183,14 +182,17 @@ Owner authentication and deny-by-default writes must exist before this page, or 
   - `live-agents.ts`: response validation, poll-state transitions, fetch helper and merge.
   - `live-evidence.ts`: UI-side copy of the evidence contract, validation, URL allowlist, poll state and display rules.
   - `LiveEvidence.tsx`: evidence section.
-  - `demo-fixture.ts`: synthetic fixture.
+  - `observed-snapshot.ts`: empty runtime snapshot (`mode: "observed"`).
+  - `SourceCoverageBanner.tsx`: runtime data-source banner.
+  - `ObservedArtifacts.tsx`: Drive/GitHub observed-artifact shelf.
+  - `demo-fixture.ts`: synthetic fixture, for pure component tests only.
   - `MissionControlClient.tsx`: polling client.
   - `OwnerOverview.tsx` and the section components.
-- Tests: `tests/unit/mission-control-freshness.test.tsx`, `tests/unit/mission-control-owner-overview.test.tsx`, `tests/unit/mission-control-live-agents.test.tsx`, `tests/unit/mission-control-live-evidence.test.tsx`.
+- Tests: `tests/unit/mission-control-freshness.test.tsx`, `tests/unit/mission-control-owner-overview.test.tsx`, `tests/unit/mission-control-live-agents.test.tsx`, `tests/unit/mission-control-live-evidence.test.tsx`, `tests/unit/mission-control-observed-overview.test.tsx`.
 
 ## What further adapters must supply
 
-Every panel other than the agent board and the live evidence section still renders the synthetic fixture. Any future read-only adapter that replaces part of the fixture must follow these rules:
+On the runtime page, the owner inbox and project radar are NOT CONNECTED and the artifact shelf is not task-linked. Any future read-only adapter that fills them must follow these rules:
 
 1. **Provenance per datum.** Each item needs a `SourceStamp`:
    - `source`: a named system.
@@ -202,6 +204,6 @@ Every panel other than the agent board and the live evidence section still rende
 2. **Agents.** Report availability separately from run state. Do not infer an assignment from a branch name or process name alone. A lost heartbeat must yield `unknown`/`interrupted`, never `succeeded` or `idle`.
 3. **Inbox.** Include the exact target, impact and `createdAt`. Approval actions stay absent until an authenticated backend binds approval to the exact payload and rejects changed payloads.
 4. **Projects.** Use `verification: "verified"` only when the state was read from a named source. A green CI result must not clear a release blocker.
-5. **Deliverables.** Link each artifact to its task/project. Keep the empty "not connected" state until a source is configured.
-6. **Mode.** Set `mode: "live"` only when every panel is backed by a live adapter. Mixed snapshots stay `mixed`, so the banner remains.
+5. **Deliverables.** Link each artifact to its task/project before calling it a deliverable. Until then the shelf stays "Observed artifacts".
+6. **Mode.** Set `mode: "live"` only when every panel is backed by a live adapter. The runtime snapshot stays `observed`, so the coverage banner remains.
 7. **Security gate first.** Owner authentication, deny-by-default writes and redaction come before any further connector. Never put secrets in a snapshot.

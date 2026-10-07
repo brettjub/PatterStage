@@ -1,18 +1,17 @@
 // ═══════════════════════════════════════════════════════════════
-// MissionControlClient — demo fixture + live agent / evidence polling
+// MissionControlClient — observed-only owner overview polling
 // ═══════════════════════════════════════════════════════════════
-// Builds the synthetic fixture once on mount, polls the same-origin
-// agents and evidence routes independently (never the VPS or any
-// provider directly) and ticks the clock so held observations turn
-// STALE even while polls keep failing.
+// Starts from an empty `observed` snapshot (never the demo fixture),
+// polls the same-origin agents and evidence routes independently
+// (never the VPS or any provider directly) and ticks the clock so held
+// observations turn STALE even while polls keep failing.
 
 "use client";
 
 import { useEffect, useState } from "react";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import OwnerOverview from "./OwnerOverview";
-import DemoDataBanner from "./DemoDataBanner";
-import { buildDemoSnapshot } from "./demo-fixture";
+import { buildObservedSnapshot } from "./observed-snapshot";
 import {
   applyPollFailure,
   applyPollSuccess,
@@ -35,14 +34,14 @@ import {
 import type { OwnerOverviewSnapshot } from "./types";
 
 export default function MissionControlClient() {
-  const [fixture, setFixture] = useState<OwnerOverviewSnapshot | null>(null);
+  const [base, setBase] = useState<OwnerOverviewSnapshot | null>(null);
   const [nowMs, setNowMs] = useState<number | null>(null);
   const [live, setLive] = useState<LiveAgentsState>(INITIAL_LIVE_AGENTS_STATE);
   const [evidence, setEvidence] = useState<LiveEvidenceState>(INITIAL_LIVE_EVIDENCE_STATE);
 
   useEffect(() => {
     const now = Date.now();
-    setFixture(buildDemoSnapshot(now));
+    setBase(buildObservedSnapshot(now));
     setNowMs(now);
     const tick = setInterval(() => setNowMs(Date.now()), CLOCK_TICK_MS);
     return () => clearInterval(tick);
@@ -92,18 +91,13 @@ export default function MissionControlClient() {
     };
   }, []);
 
-  if (fixture === null || nowMs === null) {
-    return (
-      <div className="flex flex-col">
-        <DemoDataBanner />
-        <LoadingSpinner text="Loading overview..." />
-      </div>
-    );
+  if (base === null || nowMs === null) {
+    return <LoadingSpinner text="Loading overview..." />;
   }
 
   return (
     <OwnerOverview
-      snapshot={withEvidenceMode(mergeLiveAgents(fixture, live), evidence)}
+      snapshot={withEvidenceMode(mergeLiveAgents(base, live), evidence)}
       nowMs={nowMs}
       live={live}
       evidence={evidence}

@@ -16,8 +16,32 @@ export function sortInboxOldestFirst(items: OwnerInboxItem[]): OwnerInboxItem[] 
   return [...items].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 }
 
-export default function OwnerInbox({ items, nowMs }: { items: OwnerInboxItem[]; nowMs: number }) {
+export default function OwnerInbox({
+  items,
+  nowMs,
+  notConnected = false,
+}: {
+  items: OwnerInboxItem[];
+  nowMs: number;
+  /** No authoritative inbox source exists: show NOT CONNECTED, never an empty or zero inbox. */
+  notConnected?: boolean;
+}) {
   const sorted = sortInboxOldestFirst(items);
+  if (notConnected) {
+    return (
+      <Section
+        id="owner-inbox"
+        title="Owner inbox"
+        icon={Inbox}
+        description="Owner decisions and approval requests, oldest first, once a source exists."
+      >
+        <p className="rounded-lg border border-dashed border-white/20 p-3 text-sm text-white/70" data-testid="mc-inbox-not-connected">
+          NOT CONNECTED — no authoritative owner-inbox source exists yet. Pending decisions and approvals are unknown;
+          this is not zero.
+        </p>
+      </Section>
+    );
+  }
   return (
     <Section
       id="owner-inbox"

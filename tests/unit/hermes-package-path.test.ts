@@ -9,6 +9,13 @@ jest.mock("fs", () => ({
   ...jest.requireActual<typeof import("fs")>("fs"),
   existsSync: jest.fn(jest.requireActual<typeof import("fs")>("fs").existsSync),
 }));
+// The runtime's temp directory may live inside the real ~/.hermes tree.
+// Use a distinct synthetic home so these fixtures exercise a non-native
+// HERMES_HOME regardless of where CI or the agent puts temporary files.
+jest.mock("os", () => {
+  const actual = jest.requireActual<typeof import("os")>("os");
+  return { ...actual, homedir: () => `${actual.homedir()}/patterstage-package-test-home` };
+});
 
 import {
   getHermesAgentPackageDir,

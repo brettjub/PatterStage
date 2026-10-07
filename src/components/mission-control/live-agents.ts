@@ -4,9 +4,10 @@
 // Validates GET /api/mission-control/agents and tracks poll state.
 // The browser only ever talks to that same-origin route; the route
 // (implemented server-side) is what reaches the VPS exporter.
-// Only the agent board can become live. Projects, inbox and
-// deliverables stay demo, so the snapshot is `mixed`, never `live`.
+// Only the agent board can become live, so a snapshot is never `live`:
+// a demo snapshot becomes `mixed`; the runtime `observed` one stays put.
 
+import { assessFreshness } from "./freshness";
 import type { AgentAvailability, AgentBoardEntry, OwnerOverviewSnapshot } from "./types";
 
 export const LIVE_AGENTS_ROUTE = "/api/mission-control/agents";
@@ -15,6 +16,8 @@ export const LIVE_AGENTS_POLL_MS = 20_000;
 export const LIVE_AGENTS_REQUEST_TIMEOUT_MS = 15_000;
 /** Re-render cadence so a held observation ages into STALE without a new response. */
 export const CLOCK_TICK_MS = 15_000;
+/** The board-level observation turns STALE after this many minutes. */
+export const LIVE_STALE_AFTER_MINUTES = 1;
 
 const MAX_AGENTS = 200;
 const MAX_TEXT = 200;
@@ -169,13 +172,27 @@ export function applyPollFailure(state: LiveAgentsState, error: string): LiveAge
 }
 
 /**
- * Put the live agents (or none, before any success) into the demo snapshot.
- * Fixture agents are never shown next to a live connector.
+ * Put the live agents (or none, before any success) into the snapshot.
+ * Fixture agents are never shown next to a live connector. An `observed`
+ * snapshot keeps its mode; a demo snapshot becomes `mixed` once observed.
  */
 export function mergeLiveAgents(snapshot: OwnerOverviewSnapshot, live: LiveAgentsState): OwnerOverviewSnapshot {
   return {
     ...snapshot,
-    mode: live.observation ? "mixed" : "demo",
+    mode: snapshot.mode === "observed" ? "observed" : live.observation ? "mixed" : "demo",
     agents: live.observation ? live.observation.agents : [],
   };
+}
+
+/** Headline state of the agent process source. Only `live` may be presented as current. */
+export type AgentSourceDisplay = "live" | "held" | "stale" | "connecting" | "not_connected";
+
+export function agentSourceDisplay(live: LiveAgentsState, nowMs: number): AgentSourceDisplay {
+  if (!live.observation) return live.connector === "connecting" ? "connecting" : "not_connected";
+  const freshness = assessFreshness(
+    { source: live.observation.source, kind: "live", checkedAt: live.observation.checkedAt, staleAfterMinutes: LIVE_STALE_AFTER_MINUTES },
+    nowMs
+  );
+  if (freshness.state !== "fresh") return "stale";
+  return live.connector === "connected" ? "live" : "held";
 }
