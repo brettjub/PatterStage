@@ -2,8 +2,9 @@
 // Owner Overview — one-minute, read-only Mission Control view
 // ═══════════════════════════════════════════════════════════════
 // Pure render of an `OwnerOverviewSnapshot` at a given `nowMs`.
-// Contains no fetches and no action controls; live agent and evidence
-// polling live in `MissionControlClient.tsx` and arrive via props.
+// Contains no fetches and no action controls; live agent, evidence and
+// owner register polling live in `MissionControlClient.tsx` and arrive
+// via props.
 // `observed` mode (the runtime page) shows only route observations;
 // demo/mixed modes render the fixture for pure tests.
 
@@ -12,7 +13,7 @@ import DeliverablesRisks from "./DeliverablesRisks";
 import DemoDataBanner from "./DemoDataBanner";
 import LiveEvidence from "./LiveEvidence";
 import ObservedArtifacts from "./ObservedArtifacts";
-import OwnerInbox, { sortInboxOldestFirst } from "./OwnerInbox";
+import OwnerInbox, { sortDecisionsOldestFirst, sortInboxOldestFirst } from "./OwnerInbox";
 import ProjectRadar from "./ProjectRadar";
 import SourceCoverageBanner, { sourceCoverage } from "./SourceCoverageBanner";
 import { agentSourceDisplay, INITIAL_LIVE_AGENTS_STATE, type LiveAgentsState } from "./live-agents";
@@ -25,6 +26,12 @@ import {
   type EvidenceSourceId,
   type LiveEvidenceState,
 } from "./live-evidence";
+import {
+  registerSourceDisplay,
+  type RegisterDisplay,
+  type RegisterState,
+} from "./live-register";
+import { registerReadText } from "./RegisterStatus";
 import { assessFreshness, displayedAgentState, formatAge, type DisplayedAgentState } from "./freshness";
 import type { OwnerOverviewSnapshot, SourceStamp } from "./types";
 
@@ -95,9 +102,11 @@ interface OwnerOverviewProps {
   live?: LiveAgentsState;
   /** Live evidence connector state; omit to leave the evidence section out. */
   evidence?: LiveEvidenceState;
+  /** Owner register poll state (observed mode only); omit to keep inbox and radar NOT CONNECTED. */
+  register?: RegisterState;
 }
 
-export default function OwnerOverview({ snapshot, nowMs, live, evidence }: OwnerOverviewProps) {
+export default function OwnerOverview({ snapshot, nowMs, live, evidence, register }: OwnerOverviewProps) {
   const inbox = sortInboxOldestFirst(snapshot.inbox);
   const oldest = inbox[0];
   const oldestAge = oldest ? Math.max(0, Math.floor((nowMs - Date.parse(oldest.createdAt)) / 60_000)) : null;
@@ -137,6 +146,7 @@ export default function OwnerOverview({ snapshot, nowMs, live, evidence }: Owner
         nowMs={nowMs}
         live={live ?? INITIAL_LIVE_AGENTS_STATE}
         evidence={evidence ?? INITIAL_LIVE_EVIDENCE_STATE}
+        register={register}
         snapshot={snapshot}
         agentsText={agentsText}
       />
@@ -223,18 +233,64 @@ function SummaryItem({ label, testId, children }: { label: string; testId: strin
   );
 }
 
+const HELD_PREFIX: Partial<Record<RegisterDisplay, string>> = {
+  held: "HELD",
+  stale: "STALE",
+  unknown: "UNKNOWN READ TIME",
+};
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Inbox and blocker summary lines from the register; never a current zero unless the read is live. */
+function registerSummary(register: RegisterState, nowMs: number): { needs: string; blocker: string } {
+  const display = registerSourceDisplay(register, nowMs);
+  const obs = register.observation;
+  if (display === "connecting") return { needs: "CONNECTING — unknown", blocker: "CONNECTING — unknown" };
+  if (!obs || display === "unavailable") {
+    return {
+      needs: "UNAVAILABLE — unknown (owner register could not be read)",
+      blocker: "UNAVAILABLE — unknown (owner register could not be read)",
+    };
+  }
+  const provenance = `source: owner register · ${registerReadText(register, nowMs)}`;
+  const count = plural(obs.decisions.length, "open decision", "open decisions");
+  const oldest = sortDecisionsOldestFirst(obs.decisions)[0];
+  const oldestText = oldest
+    ? ` · oldest raised ${formatAge(Math.max(0, Math.floor((nowMs - Date.parse(oldest.raisedAt)) / 60_000)))}`
+    : "";
+  const blocked = obs.projects.find((p) => p.blocker);
+  const blockerText = blocked
+    ? `${blocked.name} — ${blocked.blocker} (recorded in register, not verified)`
+    : "No blocker recorded in register (recorded, not verified)";
+  if (display === "live") {
+    return {
+      needs: `${count} recorded in register${oldestText} — ${provenance}`,
+      blocker: `${blockerText} — ${provenance}`,
+    };
+  }
+  const prefix = HELD_PREFIX[display] ?? "HELD";
+  return {
+    needs: `${prefix} — last read recorded ${count}; current count unknown — ${provenance}`,
+    blocker: `${prefix} — last read: ${blockerText}; current state unknown — ${provenance}`,
+  };
+}
+
 /** Runtime view: route observations only; panels without a source say NOT CONNECTED. */
 function ObservedOverview({
   snapshot,
   nowMs,
   live,
   evidence,
+  register,
   agentsText,
 }: {
   snapshot: OwnerOverviewSnapshot;
   nowMs: number;
   live: LiveAgentsState;
   evidence: LiveEvidenceState;
+  register?: RegisterState;
   agentsText: string;
 }) {
   const agentDisplay = agentSourceDisplay(live, nowMs);
@@ -244,9 +300,15 @@ function ObservedOverview({
       evidenceSourceDisplay(evidence.observation?.sources.find((s) => s.id === id), evidence.connector, nowMs),
     ])
   ) as Record<EvidenceSourceId, EvidenceSourceDisplay>;
-  const coverage = sourceCoverage(agentDisplay, evidenceDisplay);
-  const totalSources = 1 + EVIDENCE_SOURCE_IDS.length;
-  const liveCount = (agentDisplay === "live" ? 1 : 0) + liveEvidenceSourceIds(evidence, nowMs).length;
+  const registerDisplay = register ? registerSourceDisplay(register, nowMs) : undefined;
+  const coverage = sourceCoverage(agentDisplay, evidenceDisplay, registerDisplay);
+  const totalSources = 1 + EVIDENCE_SOURCE_IDS.length + (register ? 1 : 0);
+  const liveCount =
+    (agentDisplay === "live" ? 1 : 0) +
+    liveEvidenceSourceIds(evidence, nowMs).length +
+    (registerDisplay === "live" ? 1 : 0);
+  const notConnectedPanels = register ? 0 : NOT_CONNECTED_PANELS;
+  const registerText = register ? registerSummary(register, nowMs) : null;
   const observedAgentsText = agentDisplay === "live"
     ? agentsText
     : agentDisplay === "held" || agentDisplay === "stale"
@@ -257,7 +319,19 @@ function ObservedOverview({
 
   return (
     <div className="flex flex-col" data-testid="mc-owner-overview">
-      <SourceCoverageBanner agents={agentDisplay} evidence={evidenceDisplay} />
+      <SourceCoverageBanner
+        agents={agentDisplay}
+        evidence={evidenceDisplay}
+        register={
+          register && registerDisplay
+            ? {
+                display: registerDisplay,
+                sheetUrl: register.observation?.sheetUrl ?? null,
+                sheetUrlWithheld: register.observation?.sheetUrlWithheld ?? false,
+              }
+            : undefined
+        }
+      />
 
       <div className="mx-auto w-full max-w-6xl p-4 sm:p-6 space-y-4">
         <section aria-labelledby="mc-summary-heading" className="rounded-xl border border-white/10 bg-dark-900/50 p-4">
@@ -273,27 +347,28 @@ function ObservedOverview({
           </h2>
           <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
             <SummaryItem label="Owner inbox" testId="mc-summary-needs">
-              NOT CONNECTED — unknown (no inbox source)
+              {registerText ? registerText.needs : "NOT CONNECTED — unknown (no inbox source)"}
             </SummaryItem>
             <SummaryItem label="Agents" testId="mc-summary-agents">
               {observedAgentsText}
             </SummaryItem>
             <SummaryItem label="Biggest recorded blocker" testId="mc-summary-blocker">
-              UNKNOWN — no project source connected
+              {registerText ? registerText.blocker : "UNKNOWN — no project source connected"}
             </SummaryItem>
             <SummaryItem label="Freshness" testId="mc-summary-freshness">
               {liveCount} of {totalSources} observed sources live · {totalSources - liveCount} not currently live
-              (unknown, unavailable, held or stale) · {NOT_CONNECTED_PANELS} panels not connected
+              (unknown, unavailable, held or stale)
+              {notConnectedPanels > 0 && ` · ${notConnectedPanels} panels not connected`}
             </SummaryItem>
           </dl>
         </section>
 
         <JumpNav links={OBSERVED_JUMP_LINKS} />
 
-        <OwnerInbox items={[]} nowMs={nowMs} notConnected />
+        <OwnerInbox items={[]} nowMs={nowMs} notConnected register={register} />
         <AgentBoard agents={snapshot.agents} nowMs={nowMs} live={live} />
         <LiveEvidence live={evidence} nowMs={nowMs} observedMode />
-        <ProjectRadar projects={[]} nowMs={nowMs} notConnected />
+        <ProjectRadar projects={[]} nowMs={nowMs} notConnected register={register} />
         <ObservedArtifacts live={evidence} nowMs={nowMs} />
 
         <p className="text-xs text-white/60 pb-4" data-testid="mc-readonly-note">

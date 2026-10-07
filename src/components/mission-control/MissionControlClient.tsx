@@ -2,9 +2,10 @@
 // MissionControlClient — observed-only owner overview polling
 // ═══════════════════════════════════════════════════════════════
 // Starts from an empty `observed` snapshot (never the demo fixture),
-// polls the same-origin agents and evidence routes independently
-// (never the VPS or any provider directly) and ticks the clock so held
-// observations turn STALE even while polls keep failing.
+// polls the same-origin agents, evidence and owner register routes
+// independently (never the VPS, a provider or the Sheet directly) and
+// ticks the clock so held observations turn STALE even while polls keep
+// failing.
 
 "use client";
 
@@ -31,6 +32,14 @@ import {
   withEvidenceMode,
   type LiveEvidenceState,
 } from "./live-evidence";
+import {
+  applyRegisterFailure,
+  applyRegisterSuccess,
+  fetchOwnerRegister,
+  INITIAL_REGISTER_STATE,
+  REGISTER_POLL_MS,
+  type RegisterState,
+} from "./live-register";
 import type { OwnerOverviewSnapshot } from "./types";
 
 export default function MissionControlClient() {
@@ -38,6 +47,7 @@ export default function MissionControlClient() {
   const [nowMs, setNowMs] = useState<number | null>(null);
   const [live, setLive] = useState<LiveAgentsState>(INITIAL_LIVE_AGENTS_STATE);
   const [evidence, setEvidence] = useState<LiveEvidenceState>(INITIAL_LIVE_EVIDENCE_STATE);
+  const [register, setRegister] = useState<RegisterState>(INITIAL_REGISTER_STATE);
 
   useEffect(() => {
     const now = Date.now();
@@ -91,6 +101,28 @@ export default function MissionControlClient() {
     };
   }, []);
 
+  // The owner register (inbox + project radar) has its own loop too; a failure holds the last read.
+  useEffect(() => {
+    const controller = new AbortController();
+    let next: ReturnType<typeof setTimeout> | undefined;
+
+    const poll = async () => {
+      const result = await fetchOwnerRegister(controller.signal);
+      if (controller.signal.aborted) return;
+      setRegister((prev) =>
+        result.ok ? applyRegisterSuccess(prev, result.observation) : applyRegisterFailure(prev, result.error)
+      );
+      setNowMs(Date.now());
+      next = setTimeout(poll, REGISTER_POLL_MS);
+    };
+    void poll();
+
+    return () => {
+      controller.abort();
+      if (next) clearTimeout(next);
+    };
+  }, []);
+
   if (base === null || nowMs === null) {
     return <LoadingSpinner text="Loading overview..." />;
   }
@@ -101,6 +133,7 @@ export default function MissionControlClient() {
       nowMs={nowMs}
       live={live}
       evidence={evidence}
+      register={register}
     />
   );
 }
