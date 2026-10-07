@@ -4,7 +4,8 @@
 
 **Status: mostly DEMO. The page is never LIVE as a whole.**
 
-- **Agent board.** This is the only panel that can show live data. It polls the same-origin route `GET /api/mission-control/agents`, which shows which agent processes a VPS exporter observed. The browser never contacts the VPS.
+- **Agent board.** Can show live data. It polls the same-origin route `GET /api/mission-control/agents`, which shows which agent processes a VPS exporter observed. The browser never contacts the VPS.
+- **Live evidence.** Can show live data. It polls the same-origin route `GET /api/mission-control/evidence` on its own loop and lists Hermes task/run records, GitHub PR state/checks and Drive file metadata per source. It is a separate section: evidence never makes an inbox item or project live. See [Live evidence section](#live-evidence-section-ui).
 - **Owner inbox, Project radar, Deliverables & risks.** These panels show **synthetic demo data**. None of it describes a real project, person, decision or business system.
 - **No action controls.** The page has no dispatch, cancel, approve, save or send controls.
 
@@ -14,9 +15,10 @@
 
 | Panel | Purpose | Content |
 |-------|---------|---------|
-| Banner + header badge | Persistent data-source notice | `DEMO · NOT CONNECTED · NOT LIVE` until the first successful agent poll. After that, `MIXED · DEMO DATA + LIVE AGENT PROCESS OBSERVATION · PAGE NOT LIVE`. |
-| One-minute view | Open items, agent state counts, biggest recorded blocker, freshness count | Computed at render time. "N live sources" counts only live stamps that are still fresh. |
+| Banner + header badge | Persistent data-source notice | `DEMO · NOT CONNECTED · NOT LIVE` until a successful agent poll or an evidence poll with a live source. After that, `MIXED · … · PAGE NOT LIVE`, naming which sections carry live observations. |
+| One-minute view | Open items, agent state counts, biggest recorded blocker, freshness count | Computed at render time. "N live sources" counts only live stamps that are still fresh, plus evidence sources that are fresh **and** came from a successful poll. |
 | Owner inbox | Decisions and approvals, oldest first; items older than 3 days are flagged | Synthetic "Example decision…" rows plus one simulated approval row |
+| Live evidence | Hermes / GitHub / Drive sources, each with its own LIVE, HELD, STALE, UNAVAILABLE or UNKNOWN state | Rendered only by the polling client. Before the first successful poll every source is UNKNOWN. |
 | Agent board | **LIVE VPS AGENT PROCESS OBSERVATION**: connector status, source, checked-at, and one row per observed process | Live data when connected. Before the first successful poll there are no rows; the board shows NOT CONNECTED / unknown. |
 | Project radar | Recorded state, position, blocker and next move | Synthetic "Example project …" rows, all **UNVERIFIED** with no successful check on record |
 | Deliverables & risks | Evidence-shelf placeholder and risk list | Deliverables: *not connected* (empty). Risks: stale/unchecked count, "business panels are demo only", "spend unavailable (not $0)". |
@@ -126,6 +128,23 @@ CH_DATA_DIR="$HOME/.patterstage-preview/data" npm run db:migrate
 
 If a previous run created a partial database (errors such as `no such table: sessions`), stop the app and use a **new** isolated directory (for example `data-v2`) for both `db:migrate` and the app. Do not delete the old directory; it may contain data worth preserving. A fresh development run now applies the baseline and incremental migrations automatically, but an already-partial database must not be silently treated as healthy.
 
+## Live evidence section (UI)
+
+The backend route and its connectors are documented separately (`docs/mission-control-evidence-bridge.md`). This section covers only what the browser does with the response.
+
+- **Contract checked at the client boundary.** `{ schemaVersion: 1, checkedAt, sources: [{ id, status, checkedAt, items }] }` with **exactly** the three sources `hermes`, `github` and `drive`. Times must be ISO-8601 UTC (`Z` or `+00:00`). A `live` source needs a `checkedAt`; an `unavailable` source must carry no items. Kinds are tied to sources: Hermes → `task`/`run`, GitHub → `pull_request`, Drive → `document`. Any malformed source or item rejects the whole response, which counts as a failed poll.
+- **Links.** Rendered only for absolute `https` URLs without credentials or ports on `github.com` (GitHub) or `drive.google.com` / `docs.google.com` (Drive). Hermes items are never linked. Any other URL is dropped and the item says "Link withheld".
+- **Polling.** Its own sequential loop, independent of the agent poll: `cache: "no-store"`, every 60 s, 20 s request timeout, aborted with its timer on unmount.
+- **Source states.**
+  - **LIVE:** fresh and from a successful poll.
+  - **HELD — LAST POLL FAILED:** the route failed; the previous items stay with their timestamps and the connector error. HELD is never counted as live.
+  - **STALE:** last successful check more than 10 minutes old.
+  - **UNAVAILABLE:** the route reported it could not read the source. This is not zero and not idle.
+  - **UNKNOWN:** no observation yet, or an unusable timestamp.
+
+  A live source with no items says "returned 0 items".
+- **Scope labels.** GitHub shows PR state/checks only and says a PR or green check is not a merge, deploy or release approval. Drive shows metadata only; contents are not read. Hermes shows only records the route returned.
+
 ## Security posture (required)
 
 This page reads data, but it lives inside the Control Hub shell. The shell's existing API routes include config writes, cron management, mission dispatch and file access, and they have **no authentication**. Anyone who can reach the port can call them. The new agents route also triggers an SSH connection to the VPS on every request.
@@ -152,7 +171,7 @@ Owner authentication and deny-by-default writes must exist before this page, or 
 
 - **Layout.** Single column by default; the `sm:`/`md:` breakpoints add columns.
 - **Jump nav.** `<nav aria-label="Owner overview sections">` with 44px touch targets. Each target is a `<section tabindex="-1" aria-labelledby>` with an `h2`, so it can take keyboard focus.
-- **Reading order.** Summary → Owner inbox → agents → projects → deliverables & risks.
+- **Reading order.** Summary → Owner inbox → agents → live evidence → projects → deliverables & risks.
 - **Tokens.** Theme tokens only (`neon-*`, `semantic-*`, `dark-*`); no raw hex values.
 
 ## Files
@@ -162,14 +181,16 @@ Owner authentication and deny-by-default writes must exist before this page, or 
   - `types.ts`: data contract.
   - `freshness.ts`: pure freshness rules.
   - `live-agents.ts`: response validation, poll-state transitions, fetch helper and merge.
+  - `live-evidence.ts`: UI-side copy of the evidence contract, validation, URL allowlist, poll state and display rules.
+  - `LiveEvidence.tsx`: evidence section.
   - `demo-fixture.ts`: synthetic fixture.
   - `MissionControlClient.tsx`: polling client.
   - `OwnerOverview.tsx` and the section components.
-- Tests: `tests/unit/mission-control-freshness.test.tsx`, `tests/unit/mission-control-owner-overview.test.tsx`, `tests/unit/mission-control-live-agents.test.tsx`.
+- Tests: `tests/unit/mission-control-freshness.test.tsx`, `tests/unit/mission-control-owner-overview.test.tsx`, `tests/unit/mission-control-live-agents.test.tsx`, `tests/unit/mission-control-live-evidence.test.tsx`.
 
 ## What further adapters must supply
 
-Every panel other than the agent board still renders the synthetic fixture. Any future read-only adapter that replaces part of the fixture must follow these rules:
+Every panel other than the agent board and the live evidence section still renders the synthetic fixture. Any future read-only adapter that replaces part of the fixture must follow these rules:
 
 1. **Provenance per datum.** Each item needs a `SourceStamp`:
    - `source`: a named system.

@@ -1,8 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // Mission Control — Owner Overview (read-only, mostly DEMO)
 // ═══════════════════════════════════════════════════════════════
-// Synthetic fixture data plus an optional live agent process
-// observation; does not replace the `/` dashboard.
+// Synthetic fixture data plus optional live agent process and
+// evidence observations; does not replace the `/` dashboard.
 // See docs/mission-control-owner-overview.md.
 
 import type { Metadata } from "next";
@@ -13,7 +13,7 @@ import MissionControlClient from "@/components/mission-control/MissionControlCli
 
 export const metadata: Metadata = {
   title: "Mission Control (demo) | Control Hub",
-  description: "Read-only owner overview: synthetic demo data plus an optional live agent process observation.",
+  description: "Read-only owner overview: synthetic demo data plus optional live agent process and evidence observations.",
 };
 
 export default function MissionControlPage() {
@@ -22,7 +22,7 @@ export default function MissionControlPage() {
       <PageHeader
         icon={Radar}
         title="Mission Control"
-        subtitle="Owner overview · read-only · demo data + agent process observation"
+        subtitle="Owner overview · read-only · demo data + live observations"
         color="purple"
         actions={
           <span

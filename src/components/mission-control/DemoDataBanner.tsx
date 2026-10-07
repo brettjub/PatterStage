@@ -15,8 +15,29 @@ const COPY = {
   },
 } as const;
 
-export default function DemoDataBanner({ mode = "demo" }: { mode?: "demo" | "mixed" }) {
-  const copy = COPY[mode];
+/** Which sections have carried a live observation; drives the mixed-mode wording. */
+export interface LiveParts {
+  agents: boolean;
+  evidence: boolean;
+}
+
+function mixedCopy(parts: LiveParts): { title: string; body: string } {
+  if (!parts.evidence) return COPY.mixed;
+  const live = parts.agents ? "the agent board and the Live evidence section reflect" : "the Live evidence section reflects";
+  return {
+    title: "MIXED · DEMO DATA + LIVE OBSERVATIONS · PAGE NOT LIVE",
+    body: `Only ${live} live observations (check each source's freshness). Owner inbox, project radar and deliverables are synthetic demo data; evidence does not make any project live.`,
+  };
+}
+
+export default function DemoDataBanner({
+  mode = "demo",
+  liveParts = { agents: true, evidence: false },
+}: {
+  mode?: "demo" | "mixed";
+  liveParts?: LiveParts;
+}) {
+  const copy = mode === "mixed" ? mixedCopy(liveParts) : COPY.demo;
   return (
     <aside
       aria-label="Data source notice"

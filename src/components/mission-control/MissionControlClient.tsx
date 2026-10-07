@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
-// MissionControlClient — demo fixture + live agent process polling
+// MissionControlClient — demo fixture + live agent / evidence polling
 // ═══════════════════════════════════════════════════════════════
 // Builds the synthetic fixture once on mount, polls the same-origin
-// agents route (never the VPS directly) and ticks the clock so a held
-// observation turns STALE even while polls keep failing.
+// agents and evidence routes independently (never the VPS or any
+// provider directly) and ticks the clock so held observations turn
+// STALE even while polls keep failing.
 
 "use client";
 
@@ -22,12 +23,22 @@ import {
   mergeLiveAgents,
   type LiveAgentsState,
 } from "./live-agents";
+import {
+  applyEvidenceFailure,
+  applyEvidenceSuccess,
+  EVIDENCE_POLL_MS,
+  fetchLiveEvidence,
+  INITIAL_LIVE_EVIDENCE_STATE,
+  withEvidenceMode,
+  type LiveEvidenceState,
+} from "./live-evidence";
 import type { OwnerOverviewSnapshot } from "./types";
 
 export default function MissionControlClient() {
   const [fixture, setFixture] = useState<OwnerOverviewSnapshot | null>(null);
   const [nowMs, setNowMs] = useState<number | null>(null);
   const [live, setLive] = useState<LiveAgentsState>(INITIAL_LIVE_AGENTS_STATE);
+  const [evidence, setEvidence] = useState<LiveEvidenceState>(INITIAL_LIVE_EVIDENCE_STATE);
 
   useEffect(() => {
     const now = Date.now();
@@ -59,6 +70,28 @@ export default function MissionControlClient() {
     };
   }, []);
 
+  // Evidence has its own sequential loop so a slow or failing source never delays the agent board.
+  useEffect(() => {
+    const controller = new AbortController();
+    let next: ReturnType<typeof setTimeout> | undefined;
+
+    const poll = async () => {
+      const result = await fetchLiveEvidence(controller.signal);
+      if (controller.signal.aborted) return;
+      setEvidence((prev) =>
+        result.ok ? applyEvidenceSuccess(prev, result.observation) : applyEvidenceFailure(prev, result.error)
+      );
+      setNowMs(Date.now());
+      next = setTimeout(poll, EVIDENCE_POLL_MS);
+    };
+    void poll();
+
+    return () => {
+      controller.abort();
+      if (next) clearTimeout(next);
+    };
+  }, []);
+
   if (fixture === null || nowMs === null) {
     return (
       <div className="flex flex-col">
@@ -68,5 +101,12 @@ export default function MissionControlClient() {
     );
   }
 
-  return <OwnerOverview snapshot={mergeLiveAgents(fixture, live)} nowMs={nowMs} live={live} />;
+  return (
+    <OwnerOverview
+      snapshot={withEvidenceMode(mergeLiveAgents(fixture, live), evidence)}
+      nowMs={nowMs}
+      live={live}
+      evidence={evidence}
+    />
+  );
 }

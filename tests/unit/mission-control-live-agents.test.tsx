@@ -23,6 +23,7 @@ import {
   parseLiveAgentsResponse,
   type LiveAgentsState,
 } from "@/components/mission-control/live-agents";
+import { EVIDENCE_ROUTE } from "@/components/mission-control/live-evidence";
 
 const NOW = Date.parse("2030-01-15T12:00:00.000Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -251,7 +252,11 @@ describe("MissionControlClient polling", () => {
     jest.useFakeTimers();
     jest.setSystemTime(NOW);
     fetchMock = jest.fn();
-    global.fetch = fetchMock as unknown as typeof fetch;
+    // The evidence section polls its own route; keep it out of the agent-route call counts.
+    global.fetch = ((url: string, init: RequestInit) =>
+      url === EVIDENCE_ROUTE
+        ? Promise.resolve(jsonResponse(503, { error: "evidence disabled" }))
+        : fetchMock(url, init)) as unknown as typeof fetch;
   });
 
   afterEach(() => {
