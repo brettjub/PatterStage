@@ -113,7 +113,7 @@ MC_EVIDENCE_SSH_TARGET=<observer-user>@<vps-host-or-ip>
 MC_EVIDENCE_SSH_REMOTE_SCRIPT=/home/<observer-user>/bin/export-mission-evidence.py
 ```
 
-Restart the server after changing variables. The evidence and register routes require the `user@host` target form; the register route reuses `MC_EVIDENCE_SSH_TARGET` with its own fixed exporter command, so no new PC-side secret or target is needed. Test each exporter with its exact remote script path, then check all three same-origin endpoints; a bare SSH connection intentionally fails. The owner confirmed the agent/evidence PC-local endpoints returned 200 on the prior branch. The register route and revised owner view still need PC acceptance after pulling this revision.
+Restart the server after changing variables. The evidence and register routes require the `user@host` target form; the register route reuses `MC_EVIDENCE_SSH_TARGET` with its own fixed exporter command, so no new PC-side secret or target is needed. Test each exporter with its exact remote script path, then check all three same-origin endpoints; a bare SSH connection intentionally fails. The owner previously confirmed agent/evidence PC-local endpoints returned 200 and, on October 7, 2026, reported that the updated Owner inbox and Project radar looked good and were connected on his PC. No raw PC register response or failure-state test was supplied.
 
 #### WSL2 on a Windows PC
 

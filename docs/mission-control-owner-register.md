@@ -20,8 +20,8 @@ The VPS exporter reads a private 0600 sheet-ID selector and the existing private
 
 A successful 200 has `{schemaVersion:1,checkedAt,sheetUrl,decisions,projects}`. `checkedAt` is source-read time, not owner-review time. An empty `decisions` array means *zero open decisions recorded in this Sheet at that read*—not zero required decisions across all systems. An unavailable route returns 503 with a generic error; the UI must show unknown/held/stale, never empty as a substitute. Existing evidence and agent routes are independent.
 
-## Owner PC acceptance
+## Owner PC confirmation and remaining checks
 
-After the branch is published, pull it in WSL and restart the existing localhost-only dev server in the same environment. No new SSH target or secret is needed. Test the fixed read-only command using the existing SSH host-key and key configuration, then check the localhost register route: 200, two `unknown` project rows, zero recorded open decisions, and a source timestamp. Confirm the browser shows the same bounded records and manual/unknown labels. A VPS-only test does **not** verify the PC-side route or render.
+On October 7, 2026, Brett reported that the Owner inbox and Project radar looked good and were connected on his PC after the update. This confirms his visible connection check, not a captured HTTP response, row-level payload, owner-reviewed project status, or failed-refresh behavior. The last independently read VPS snapshot had two `unknown` project placeholders and zero recorded open decisions. For deeper acceptance, check the PC-local register route's status/payload and test that a failed read becomes unavailable/held/stale rather than zero or healthy. A VPS-only test does **not** establish these PC-side details.
 
 Keep `CH_DATA_DIR` and `CONTROL_HUB_DATA_DIR` on the existing isolated `~/.patterstage-preview/data-v2`; leave the older PC database and paused Launchhost coordinator untouched. Never expose this unauthenticated Control Hub port publicly.
