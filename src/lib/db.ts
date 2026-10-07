@@ -31,14 +31,18 @@ export function getDb(): Database.Database {
   if (_db) return _db;
 
   _db = new Database(DB_PATH);
-  _db.pragma("journal_mode = WAL");
-  _db.pragma("foreign_keys = ON");
-  _db.pragma("busy_timeout = 5000");
-
-  // Run migrations
-  runMigrations(_db);
-
-  return _db;
+  try {
+    _db.pragma("journal_mode = WAL");
+    _db.pragma("foreign_keys = ON");
+    _db.pragma("busy_timeout = 5000");
+    runMigrations(_db);
+    // A legacy rebuild may replace the connection during migration.
+    return _db;
+  } catch (error) {
+    try { _db?.close(); } catch { /* migration may have closed it */ }
+    _db = null;
+    throw error;
+  }
 }
 
 /** Alias — most code uses db() not getDb() */
@@ -106,22 +110,34 @@ function runMigrations(database: Database.Database): void {
     );
   `);
 
-  const migrationsDir = join(__dirname, "db", "migrations");
+  // Next/Turbopack may compile this module into .next/server/chunks; __dirname
+  // then points at the bundle, not src/lib. Prefer bundled migrations when
+  // present, otherwise use the repository's source migrations directory.
+  const bundledMigrationsDir = join(__dirname, "db", "migrations");
+  const sourceMigrationsDir = join(process.cwd(), "src", "lib", "db", "migrations");
+  const migrationsDir = existsSync(join(bundledMigrationsDir, "001_baseline.sql"))
+    ? bundledMigrationsDir
+    : sourceMigrationsDir;
   const baselinePath = join(migrationsDir, "001_baseline.sql");
-  const baselineSql = existsSync(baselinePath)
-    ? readFileSync(baselinePath, "utf-8")
-    : "";
+  if (!existsSync(baselinePath)) {
+    throw new Error("Control Hub baseline migration missing; refusing to open a partial database");
+  }
+  const baselineSql = readFileSync(baselinePath, "utf-8");
 
   const currentVersion = getSchemaVersion(database);
   const hasCoreSchema = tableExists(database, "missions") || tableExists(database, "agent_profiles");
 
-  if (currentVersion === 0 && !hasCoreSchema && baselineSql) {
+  if (currentVersion === 0 && !hasCoreSchema) {
     database.exec(baselineSql);
     setSchemaVersion(database, BASELINE_SCHEMA_VERSION);
-    return;
+    // Continue through incremental migrations before the sync scheduler runs.
   }
 
-  if (needsBaselineRebuild(database) && baselineSql) {
+  if (currentVersion !== 0 && !hasCoreSchema) {
+    throw new Error("Control Hub database schema is incomplete; use a fresh CH_DATA_DIR and run npm run db:migrate");
+  }
+
+  if (needsBaselineRebuild(database)) {
     rebuildToBaseline(database, DB_PATH, baselineSql);
     _db = null;
     _bootstrapped = false;
@@ -151,7 +167,12 @@ let _bootstrapped = false;
 export function ensureDb(): void {
   if (_bootstrapped) return;
   _bootstrapped = true;
-  db(); // forces open + migrate
+  try {
+    db(); // forces open + migrate
+  } catch (error) {
+    _bootstrapped = false;
+    throw error;
+  }
 }
 
 export interface SchemaHealth {

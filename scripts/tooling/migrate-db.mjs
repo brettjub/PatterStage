@@ -97,6 +97,11 @@ const hasCoreSchema = Boolean(
     .get(),
 );
 
+if (currentVersion > 0 && !hasCoreSchema) {
+  db.close();
+  throw new Error("Control Hub database schema is incomplete; keep this file as a backup and use a fresh CH_DATA_DIR");
+}
+
 if (currentVersion === 0 && !hasCoreSchema) {
   const baselinePath = join(MIGRATIONS_DIR, "001_baseline.sql");
   db.exec(readFileSync(baselinePath, "utf-8"));

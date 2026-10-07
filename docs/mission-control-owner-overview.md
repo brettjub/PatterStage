@@ -115,6 +115,17 @@ Check the SSH leg by hand first: `ssh mc-vps` should print the exporter's JSON a
 - **Browse from Windows to `http://localhost:<PORT>`.** WSL2 forwards localhost from Windows to a server bound to `127.0.0.1` inside the distro, so there is no need to bind `0.0.0.0`.
 - **Watch for mirrored networking.** If WSL2 *mirrored* networking mode is enabled, a `0.0.0.0` bind inside WSL is reachable from the LAN. That is one more reason to bind `127.0.0.1`.
 
+#### First-run database
+
+Before starting `npm run dev`, initialize the **same isolated `CH_DATA_DIR`** that the app will use:
+
+```bash
+mkdir -p "$HOME/.patterstage-preview/hermes" "$HOME/.patterstage-preview/data"
+CH_DATA_DIR="$HOME/.patterstage-preview/data" npm run db:migrate
+```
+
+If a previous run created a partial database (errors such as `no such table: sessions`), stop the app and use a **new** isolated directory (for example `data-v2`) for both `db:migrate` and the app. Do not delete the old directory; it may contain data worth preserving. A fresh development run now applies the baseline and incremental migrations automatically, but an already-partial database must not be silently treated as healthy.
+
 ## Security posture (required)
 
 This page reads data, but it lives inside the Control Hub shell. The shell's existing API routes include config writes, cron management, mission dispatch and file access, and they have **no authentication**. Anyone who can reach the port can call them. The new agents route also triggers an SSH connection to the VPS on every request.
