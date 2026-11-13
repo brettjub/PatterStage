@@ -5,13 +5,16 @@
 
 import Database, { type Database as _DatabaseType } from "better-sqlite3";
 import { join } from "path";
-import { existsSync, mkdirSync, readFileSync } from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { CH_DATA_DIR } from "./paths";
-import { getSchemaVersion, setSchemaVersion } from "./db-schema";
+import { getSchemaVersion } from "./db-schema";
 import { needsBaselineRebuild, rebuildToBaseline } from "./db/upgrade";
-import { applyProfilesToolsParityUpgrade } from "./db/apply-profiles-tools-upgrade";
-import { applyMissionRepeatMigration } from "./db/apply-mission-repeat-migration";
-import { applyMissionQueueMigration } from "./db/apply-mission-queue-migration";
+import {
+  BASELINE_MIGRATION_FILE,
+  readMigrationSql,
+  resolveMigrationsDir,
+} from "./db/migration-files";
+import { runSchemaMigrations } from "./db/run-migrations";
 
 // ── Ensure data directory exists ───────────────────────────────
 
@@ -26,17 +29,31 @@ const DB_PATH = join(dataDir, "control-hub.db");
 
 let _db: Database.Database | null = null;
 
-/** Open (or reuse) the SQLite database connection. Runs migrations on first open. */
+function openConnection(): Database.Database {
+  const connection = new Database(DB_PATH);
+  connection.pragma("journal_mode = WAL");
+  connection.pragma("foreign_keys = ON");
+  connection.pragma("busy_timeout = 5000");
+  return connection;
+}
+
+/**
+ * Open (or reuse) the SQLite database connection. Runs migrations on first open.
+ *
+ * Throws when the schema cannot be brought up to date. The handle is only
+ * cached once migrations succeed, so the next call retries instead of serving
+ * queries against a half-initialised database.
+ */
 export function getDb(): Database.Database {
   if (_db) return _db;
 
-  _db = new Database(DB_PATH);
-  _db.pragma("journal_mode = WAL");
-  _db.pragma("foreign_keys = ON");
-  _db.pragma("busy_timeout = 5000");
-
-  // Run migrations
-  runMigrations(_db);
+  const connection = openConnection();
+  try {
+    _db = runMigrations(connection);
+  } catch (err) {
+    connection.close();
+    throw err;
+  }
 
   return _db;
 }
@@ -89,53 +106,18 @@ export function now(): string {
 
 // ── Migration runner ───────────────────────────────────────────
 
-const BASELINE_SCHEMA_VERSION = 3;
+/** Migrate `database` and return the handle to use (a legacy rebuild replaces the file). */
+function runMigrations(database: Database.Database): Database.Database {
+  const migrationsDir = resolveMigrationsDir();
 
-function tableExists(database: Database.Database, name: string): boolean {
-  const row = database
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(name) as { name: string } | undefined;
-  return Boolean(row);
-}
-
-function runMigrations(database: Database.Database): void {
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS meta (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-
-  const migrationsDir = join(__dirname, "db", "migrations");
-  const baselinePath = join(migrationsDir, "001_baseline.sql");
-  const baselineSql = existsSync(baselinePath)
-    ? readFileSync(baselinePath, "utf-8")
-    : "";
-
-  const currentVersion = getSchemaVersion(database);
-  const hasCoreSchema = tableExists(database, "missions") || tableExists(database, "agent_profiles");
-
-  if (currentVersion === 0 && !hasCoreSchema && baselineSql) {
-    database.exec(baselineSql);
-    setSchemaVersion(database, BASELINE_SCHEMA_VERSION);
-    return;
-  }
-
-  if (needsBaselineRebuild(database) && baselineSql) {
+  if (needsBaselineRebuild(database)) {
+    const baselineSql = readMigrationSql(migrationsDir, BASELINE_MIGRATION_FILE);
     rebuildToBaseline(database, DB_PATH, baselineSql);
-    _db = null;
-    _bootstrapped = false;
-    const reopened = new Database(DB_PATH);
-    reopened.pragma("journal_mode = WAL");
-    reopened.pragma("foreign_keys = ON");
-    reopened.pragma("busy_timeout = 5000");
-    _db = reopened;
-    return;
+    return openConnection();
   }
 
-  applyProfilesToolsParityUpgrade(database, migrationsDir);
-  applyMissionRepeatMigration(database, migrationsDir);
-  applyMissionQueueMigration(database, migrationsDir);
+  runSchemaMigrations(database, migrationsDir);
+  return database;
 }
 
 // ── Bootstrap: ensure DB + schema exist ───────────────────────
@@ -150,8 +132,8 @@ let _bootstrapped = false;
  */
 export function ensureDb(): void {
   if (_bootstrapped) return;
+  db(); // forces open + migrate; throws (and stays un-bootstrapped) when migrations fail
   _bootstrapped = true;
-  db(); // forces open + migrate
 }
 
 export interface SchemaHealth {

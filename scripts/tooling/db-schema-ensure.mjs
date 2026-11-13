@@ -1,6 +1,7 @@
 /**
  * Idempotent schema fixes after SQL migrations (v2 -> v3 parity).
  * Used when a DB partially applied an older migration chain.
+ * Mirrors src/lib/db/run-migrations.ts and src/lib/db/apply-profiles-tools-upgrade.ts.
  */
 
 import { readFileSync, readdirSync, existsSync } from "fs";
@@ -21,6 +22,33 @@ export function columnExists(database, tableName, columnName) {
 }
 
 export const PROFILES_TOOLS_PARITY_SCHEMA_VERSION = 3;
+
+/** schema_version recorded by 001_baseline.sql. */
+export const BASELINE_SCHEMA_VERSION = 3;
+
+/** True when the baseline's core tables are present. */
+export function hasCoreSchema(database) {
+  return tableExists(database, "missions") || tableExists(database, "agent_profiles");
+}
+
+/**
+ * Apply the (idempotent) baseline atomically and record its schema version.
+ * Also repairs a DB whose schema_version was bumped without the core tables:
+ * tables that already exist are kept, the missing ones are created.
+ * Returns false when the core schema was already there (nothing applied).
+ */
+export function applyBaselineSchema(database, baselineSql) {
+  // The baseline sets WAL itself; SQLite cannot change journal mode inside a transaction.
+  database.pragma("journal_mode = WAL");
+  const apply = database.transaction(() => {
+    // Another process may have initialised the file while this one waited for the write lock.
+    if (hasCoreSchema(database)) return false;
+    database.exec(baselineSql);
+    setSchemaVersionOnMeta(database, BASELINE_SCHEMA_VERSION);
+    return true;
+  });
+  return apply.immediate();
+}
 
 export function isProfilesToolsParityComplete(database) {
   return tableExists(database, "agent_root") && tableExists(database, "skills");
@@ -135,9 +163,13 @@ function setSchemaVersionOnMeta(database, version) {
 /**
  * Apply incremental SQL (002+) when schema_version < 3, then bump to 3.
  * Migration file prefix 002 is not the stored schema version on main-branch DBs.
+ * No-op (schema_version untouched) when the core schema is absent: apply the baseline first.
  */
 export function applyProfilesToolsParityUpgrade(database, migrationsDir) {
   const current = getSchemaVersionFromMeta(database);
+  if (!hasCoreSchema(database)) {
+    return current;
+  }
   if (current >= PROFILES_TOOLS_PARITY_SCHEMA_VERSION) {
     ensureProfilesToolsParity(database);
     return current;

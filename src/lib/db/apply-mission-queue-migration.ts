@@ -1,38 +1,49 @@
 import type Database from "better-sqlite3";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
 import { getSchemaVersion, setSchemaVersion } from "@/lib/db-schema";
+import { readMigrationSql } from "./migration-files";
+
 export const MISSION_QUEUE_SCHEMA_VERSION = 5;
 
-function columnExists(database: Database.Database, table: string, column: string): boolean {
-  const rows = database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
-  return rows.some((r) => r.name === column);
+function missionsColumns(database: Database.Database): string[] {
+  const rows = database.prepare("PRAGMA table_info(missions)").all() as { name: string }[];
+  return rows.map((r) => r.name);
 }
 
 /**
- * Apply 004_mission_queue.sql when schema_version is below 5.
+ * Ensure missions.queued_for_run exists (004_mission_queue.sql) and record schema_version 5.
+ *
+ * The column is checked on every call, not only below version 5: builds that
+ * could not find the SQL file recorded version 5 without adding it, and this
+ * repairs those databases on the next start.
+ *
+ * No-op (schema_version untouched) when the missions table is absent. Throws
+ * without bumping when the column is missing and the SQL cannot be found or applied.
  */
 export function applyMissionQueueMigration(
   database: Database.Database,
-  migrationsDir: string,
+  migrationsDir: string | null,
 ): number {
   const current = getSchemaVersion(database);
-  if (current >= MISSION_QUEUE_SCHEMA_VERSION) {
+  const columns = missionsColumns(database);
+  if (columns.length === 0) {
     return current;
   }
 
-  if (!columnExists(database, "missions", "queued_for_run")) {
-    const path = join(migrationsDir, "004_mission_queue.sql");
-    if (existsSync(path)) {
-      const sql = readFileSync(path, "utf-8");
-      try {
-        database.exec(sql);
-      } catch {
-        // Idempotent on partial applies.
+  if (!columns.includes("queued_for_run")) {
+    const sql = readMigrationSql(migrationsDir, "004_mission_queue.sql");
+    try {
+      database.exec(sql);
+    } catch (err) {
+      // Another process may have added the column first; anything else is a real failure.
+      if (!missionsColumns(database).includes("queued_for_run")) {
+        throw err;
       }
     }
   }
 
+  if (current >= MISSION_QUEUE_SCHEMA_VERSION) {
+    return current;
+  }
   setSchemaVersion(database, MISSION_QUEUE_SCHEMA_VERSION);
   return MISSION_QUEUE_SCHEMA_VERSION;
 }

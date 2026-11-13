@@ -1,47 +1,29 @@
 import type Database from "better-sqlite3";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { getSchemaVersion, setSchemaVersion } from "@/lib/db-schema";
+import { hasCoreSchema, readMigrationSql } from "./migration-files";
 
-const SCHEMA_VERSION_KEY = "schema_version";
 export const MISSION_REPEAT_FIX_SCHEMA_VERSION = 4;
-
-function getSchemaVersion(database: Database.Database): number {
-  try {
-    const row = database
-      .prepare("SELECT value FROM meta WHERE key = ?")
-      .get(SCHEMA_VERSION_KEY) as { value: string } | undefined;
-    return row ? parseInt(row.value, 10) : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function setSchemaVersion(database: Database.Database, version: number): void {
-  database
-    .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)")
-    .run(SCHEMA_VERSION_KEY, String(version));
-}
 
 /**
  * Apply 003_mission_infinite_repeat.sql when schema_version is below 4.
+ *
+ * No-op (schema_version untouched) when the core schema is absent. Throws
+ * without bumping when the SQL cannot be found.
  */
 export function applyMissionRepeatMigration(
   database: Database.Database,
-  migrationsDir: string,
+  migrationsDir: string | null,
 ): number {
   const current = getSchemaVersion(database);
-  if (current >= MISSION_REPEAT_FIX_SCHEMA_VERSION) {
+  if (current >= MISSION_REPEAT_FIX_SCHEMA_VERSION || !hasCoreSchema(database)) {
     return current;
   }
 
-  const path = join(migrationsDir, "003_mission_infinite_repeat.sql");
-  if (existsSync(path)) {
-    const sql = readFileSync(path, "utf-8");
-    try {
-      database.exec(sql);
-    } catch {
-      // Idempotent on partial applies.
-    }
+  const sql = readMigrationSql(migrationsDir, "003_mission_infinite_repeat.sql");
+  try {
+    database.exec(sql);
+  } catch {
+    // Best-effort data repair: legacy DBs may lack the columns it reads.
   }
 
   setSchemaVersion(database, MISSION_REPEAT_FIX_SCHEMA_VERSION);

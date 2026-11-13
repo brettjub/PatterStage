@@ -11,8 +11,11 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { homedir } from "os";
 import {
+  applyBaselineSchema,
   applyProfilesToolsParityUpgrade,
+  BASELINE_SCHEMA_VERSION,
   ensureProfilesToolsParity,
+  hasCoreSchema,
 } from "./db-schema-ensure.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -53,19 +56,9 @@ function getMeta(database, key) {
   return row ? row.value : null;
 }
 
-function setMeta(database, key, value) {
-  database
-    .prepare("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)")
-    .run(key, value);
-}
-
 function getSchemaVersion(database) {
   const v = getMeta(database, "schema_version");
   return v ? parseInt(v, 10) : 0;
-}
-
-function setSchemaVersion(database, version) {
-  setMeta(database, "schema_version", String(version));
 }
 
 loadEnvLocal();
@@ -80,6 +73,8 @@ console.log(`Database: ${dbPath}`);
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+// The server may hold the file open; wait for its writes instead of failing with SQLITE_BUSY.
+db.pragma("busy_timeout = 5000");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS meta (
@@ -91,18 +86,19 @@ db.exec(`
 let currentVersion = getSchemaVersion(db);
 console.log(`schema_version before: ${currentVersion}`);
 
-const hasCoreSchema = Boolean(
-  db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('missions', 'agent_profiles') LIMIT 1")
-    .get(),
-);
-
-if (currentVersion === 0 && !hasCoreSchema) {
+// No core tables: a fresh DB (schema_version 0), or one whose version was bumped
+// by a server that could not find the baseline SQL. Both get the baseline.
+if (!hasCoreSchema(db)) {
+  if (currentVersion > 0) {
+    console.log(
+      `schema_version is ${currentVersion} but the core tables are missing — repairing with the baseline schema`,
+    );
+  }
   const baselinePath = join(MIGRATIONS_DIR, "001_baseline.sql");
-  db.exec(readFileSync(baselinePath, "utf-8"));
-  setSchemaVersion(db, 3);
-  currentVersion = 3;
-  console.log("Applied baseline schema -> schema_version 3");
+  if (applyBaselineSchema(db, readFileSync(baselinePath, "utf-8"))) {
+    console.log(`Applied baseline schema -> schema_version ${BASELINE_SCHEMA_VERSION}`);
+  }
+  currentVersion = getSchemaVersion(db);
 }
 
 const afterUpgrade = applyProfilesToolsParityUpgrade(db, MIGRATIONS_DIR);

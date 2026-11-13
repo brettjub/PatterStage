@@ -81,4 +81,39 @@ describe("001_baseline.sql", () => {
     expect(row.status).toBe("dispatched");
     db.close();
   });
+
+  it("uses IF NOT EXISTS on every CREATE statement", () => {
+    const creates = readFileSync(baselinePath, "utf-8").match(/^CREATE\s.*$/gim) ?? [];
+    expect(creates.length).toBeGreaterThan(0);
+    for (const statement of creates) {
+      expect(statement).toMatch(/^CREATE\s+(TABLE|INDEX|UNIQUE\s+INDEX)\s+IF\s+NOT\s+EXISTS\s/i);
+    }
+  });
+
+  it("can be re-applied without changing the schema or losing rows", () => {
+    const Database = loadRealBetterSqlite3();
+    const db = new (Database as unknown as new (path: string) => import("better-sqlite3").Database)(
+      ":memory:"
+    );
+    const baselineSql = readFileSync(baselinePath, "utf-8");
+    const schema = () =>
+      db.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY type, name").all();
+
+    db.exec(baselineSql);
+    const before = schema();
+    db.prepare(
+      `INSERT INTO missions (id, name, prompt, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`
+    ).run("m1", "Mission", "prompt", "queued");
+    db.prepare("UPDATE agent_root SET display_name = ? WHERE id = 1").run("Renamed");
+
+    expect(() => db.exec(baselineSql)).not.toThrow();
+
+    expect(schema()).toEqual(before);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM missions").get()).toEqual({ n: 1 });
+    expect(db.prepare("SELECT display_name FROM agent_root WHERE id = 1").get()).toEqual({
+      display_name: "Renamed",
+    });
+    db.close();
+  });
 });

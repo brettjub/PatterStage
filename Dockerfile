@@ -44,6 +44,8 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/scripts ./scripts
+# Migration SQL is read from disk at runtime (src/lib/db/migration-files.ts, scripts/tooling/migrate-db.mjs).
+COPY --from=builder /app/src/lib/db/migrations ./src/lib/db/migrations
 
 RUN chown -R nextjs:nodejs /app/scripts
 
