@@ -10,8 +10,14 @@ test.describe("Agents page", () => {
 
   test("profile sync controls are visible", async ({ page }) => {
     await page.goto("/operations/agents");
-    await expect(page.getByRole("button", { name: /Push all/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Pull all/i })).toBeVisible();
+    // Exact names: the drift banner adds a "Push all to Hermes" button when
+    // SQLite profiles differ from the Hermes disk, which a loose match also hits.
+    await expect(
+      page.getByRole("button", { name: "Push all", exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Pull all", exact: true })
+    ).toBeVisible();
   });
 
   test("New Profile button is visible", async ({ page }) => {
