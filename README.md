@@ -101,6 +101,7 @@ See [docs/DEPLOY.md](docs/DEPLOY.md) for Docker, TLS, and environment variables.
 | Feature | Description |
 |---------|-------------|
 | **Dashboard** | Live stats, health, sync overview |
+| **My Hub** | Your own projects, tasks (with due dates; hand one to Hermes as a mission), GitHub repos and website uptime ([HUB.md](docs/HUB.md)) |
 | **Missions** | Mission board, templates, cancel stops agent + subagents |
 | **Agent profiles** | Six professional profiles + default Bob persona ([catalog](docs/CATALOG_AND_PROFILES.md)) |
 | **Cron** | Hermes agent cron + optional system cron scripts |

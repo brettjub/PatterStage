@@ -32,7 +32,8 @@ The dashboard is your **status board**, not the primary place to launch missions
 
 **What you see**
 
-- Live stats: processes, cron jobs, sessions, memory facts
+- **My hub** at the top: open and overdue tasks, an **Up next** list (add a task for today, tick it off, or hand it to Hermes), active projects with progress, and website / GitHub status. See [HUB.md](HUB.md).
+- Live Hermes stats: processes, cron jobs, sessions, memory facts
 - **Continue work** — jump to the latest session
 - **Mission dispatch** shortcuts — quick links to templates (full composer is on the Missions page)
 - **Cron jobs**, **Platforms** (gateway integrations), and **Errors** at a glance

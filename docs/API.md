@@ -30,6 +30,14 @@ Some error responses also include `details` (Zod validation). Handlers must call
 | `/api/fs/list` | `GET` | List directory entries (path-validated). |
 | `/api/gateway/health` | `GET` | Gateway health probe (`/v1/models`). |
 | `/api/gateway/models` | `GET` | List models from gateway. |
+| `/api/hub/projects` | `GET`, `POST`, `PUT`, `DELETE` | My Hub projects with task/site/repo counts (`?today=YYYY-MM-DD` for overdue maths). `DELETE ?id=` keeps the project's tasks, sites and repos, unassigned. See [HUB.md](HUB.md). |
+| `/api/hub/tasks` | `GET`, `POST`, `PUT`, `DELETE` | My Hub tasks. `GET ?projectId=<id\|none>&status=<open\|done\|all\|todo\|doing>`. `PUT` accepts `missionId` to link a Hermes mission. |
+| `/api/hub/summary` | `GET` | Dashboard overview: task counts, up-next list, active projects, site health counts (`?today=`). |
+| `/api/hub/sites` | `GET`, `POST`, `PUT`, `DELETE` | Watched websites. `GET ?check=stale` re-checks sites last checked over 5 minutes ago; `POST` checks the new site immediately. |
+| `/api/hub/sites/check` | `POST` | Re-check one site (`{ id }`) or all sites now. |
+| `/api/hub/repos` | `GET`, `POST`, `PUT`, `DELETE` | GitHub repositories on the watch list (`fullName` as `owner/name` or a github.com URL; duplicates → 409). |
+| `/api/hub/github` | `GET` | Live activity for watched repos: open PRs, last commit, latest CI run (3-minute cache; `?refresh=1` bypasses). |
+| `/api/hub/github/suggestions` | `GET` | Repositories the token's owner pushed to most recently (empty without a token). |
 | `/api/logs` | `GET`, `DELETE` | Read recent Hermes logs; clear/truncate log tail. |
 | `/api/memory` | `GET`, `POST`, `PUT`, `DELETE` | Holographic memory facts. |
 | `/api/memory/hindsight` | `GET`, `POST`, `DELETE` | Hindsight bridge (see [Hindsight actions](#hindsight-actions) below). |

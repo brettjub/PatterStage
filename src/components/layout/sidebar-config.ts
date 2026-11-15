@@ -10,7 +10,7 @@ import {
   ScrollText, Sparkles, Rocket, Volume2, Mic, GitBranch,
   RotateCcw, ShieldCheck, Lock, Code,
   BookOpen, Bot, MessageCircle,
-  AudioLines, Settings2, Network,
+  AudioLines, Settings2, Network, FolderKanban, ListChecks,
 } from "lucide-react";
 
 import type { AccentColor } from "@/types/hermes";
@@ -46,6 +46,14 @@ export const mainSections: SidebarSection[] = [
       { icon: Clock, label: "Sessions", href: "/sessions", color: "orange" },
       { icon: Database, label: "Memory", href: "/memory", color: "pink" },
       { icon: ScrollText, label: "Logs", href: "/logs", color: "cyan" },
+    ],
+  },
+  {
+    label: "My Hub",
+    links: [
+      { icon: FolderKanban, label: "Projects", href: "/hub/projects", color: "green" },
+      { icon: ListChecks, label: "Tasks", href: "/hub/tasks", color: "cyan" },
+      { icon: GitBranch, label: "Code & Sites", href: "/hub/code", color: "purple" },
     ],
   },
   {

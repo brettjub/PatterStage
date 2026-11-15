@@ -41,6 +41,7 @@ import { shellHeaderBarClasses } from "@/lib/theme";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import AppPageShell from "@/components/layout/AppPageShell";
 import { StatPill, StatPillSkeleton } from "@/components/dashboard/StatPill";
+import HubOverview from "@/components/hub/HubOverview";
 import { MissionStatusBadge, CronStatusBadge } from "@/components/dashboard/StatusBadge";
 import { safeApiCall } from "@/lib/api-fetch";
 import { HERMES_PLATFORMS } from "@/lib/hermes-toolset-catalog";
@@ -467,6 +468,12 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+        {/* ═══ My Hub: tasks, projects, code & sites ═══ */}
+        <HubOverview showToast={showToast} />
+
+        {/* ═══ Hermes ═══ */}
+        <h2 className="text-[10px] font-mono text-white/40 uppercase tracking-wider pt-2 mb-3">Hermes</h2>
+
         {/* ═══ Compact Stat Row ═══ */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 min-w-0">
           {monitor ? (

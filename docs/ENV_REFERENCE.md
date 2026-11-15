@@ -53,6 +53,12 @@ Quick lookup for Control Hub and Hermes paths. Set values in `.env.local` (creat
 | `HERMES_GATEWAY_URL` | Gateway base for health probes and chat (e.g. `http://127.0.0.1:8642`) |
 | `CONTROL_HUB_LLM_API` | Full chat completions URL or gateway-derived base |
 
+## My Hub
+
+| Variable | Purpose |
+|----------|---------|
+| `CH_GITHUB_TOKEN` / `GITHUB_TOKEN` / `GH_TOKEN` | GitHub token for **My Hub → Code & Sites** (first one set wins). If none is set in Control Hub's environment, the same names are read from the active Hermes `.env`. Read-only access to contents, pull requests and actions is enough. Without a token only public repositories work, at 60 requests an hour. |
+
 ## Debug artifact (not read by the app)
 
 After setup or `ch-deploy update`, `scripts/tooling/discover-agents.mjs` writes **`CH_DATA_DIR/hermes-detection.json`** (version 3) with `valid`, `hermesHome`, `defaultRoot`, `canonicalAgentPackage`, `legacyInstallDetected`, and related fields. Use it to verify path resolution on the host; the Next.js app does not load this file at runtime.
