@@ -8,6 +8,7 @@ export const APP_NAV_ROUTES: readonly string[] = [
   "/hub/projects",
   "/hub/tasks",
   "/hub/code",
+  "/hub/import",
   "/operations/agents",
   "/operations/tools",
   "/config",

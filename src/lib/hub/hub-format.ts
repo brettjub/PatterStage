@@ -61,3 +61,30 @@ export function buildTaskMissionInstruction(
 export function percent(done: number, total: number): number {
   return total > 0 ? Math.round((done / total) * 100) : 0;
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  gmail: "Gmail",
+  gcal: "Calendar",
+  calendar: "Calendar",
+  drive: "Drive",
+  gdrive: "Drive",
+  github: "GitHub",
+  render: "Render",
+  replit: "Replit",
+  supabase: "Supabase",
+  meta: "Meta Ads",
+  metaads: "Meta Ads",
+  googleads: "Google Ads",
+  agencyanalytics: "AgencyAnalytics",
+  aa: "AgencyAnalytics",
+  adspirer: "Adspirer",
+  client: "Clients",
+};
+
+/** Human name of the source an imported item came from, from its key prefix ("gmail:abc" → "Gmail"). */
+export function sourceLabel(externalKey: string | null): string | null {
+  if (!externalKey || !externalKey.includes(":")) return null;
+  const prefix = externalKey.split(":")[0].toLowerCase().replace(/[^a-z]/g, "");
+  if (!prefix) return null;
+  return SOURCE_LABELS[prefix] ?? prefix.charAt(0).toUpperCase() + prefix.slice(1);
+}

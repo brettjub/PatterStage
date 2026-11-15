@@ -36,6 +36,7 @@ Some error responses also include `details` (Zod validation). Handlers must call
 | `/api/hub/sites` | `GET`, `POST`, `PUT`, `DELETE` | Watched websites. `GET ?check=stale` re-checks sites last checked over 5 minutes ago; `POST` checks the new site immediately. |
 | `/api/hub/sites/check` | `POST` | Re-check one site (`{ id }`) or all sites now. |
 | `/api/hub/repos` | `GET`, `POST`, `PUT`, `DELETE` | GitHub repositories on the watch list (`fullName` as `owner/name` or a github.com URL; duplicates → 409). |
+| `/api/hub/import` | `GET`, `POST` | Bulk import / sync of projects, tasks, sites and repos (Import page and the Hermes sync job). `POST { dryRun?, projects?, tasks?, sites?, repos? }` returns per-item `create` / `update` / `unchanged` / `skip`; matching and rules in [HUB.md](HUB.md#import--sync). `GET` returns the local endpoint for jobs on the same machine. |
 | `/api/hub/github` | `GET` | Live activity for watched repos: open PRs, last commit, latest CI run (3-minute cache; `?refresh=1` bypasses). |
 | `/api/hub/github/suggestions` | `GET` | Repositories the token's owner pushed to most recently (empty without a token). |
 | `/api/logs` | `GET`, `DELETE` | Read recent Hermes logs; clear/truncate log tail. |

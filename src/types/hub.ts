@@ -49,6 +49,8 @@ export interface HubTask {
   priority: TaskPriority;
   /** Calendar date YYYY-MM-DD, or null. */
   dueDate: string | null;
+  /** Stable id from the source the task was imported from, e.g. "gmail:<threadId>". */
+  externalKey: string | null;
   /** Hermes mission created from this task, if any. */
   missionId: string | null;
   missionName: string | null;

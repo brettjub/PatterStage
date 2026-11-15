@@ -2,7 +2,7 @@
 
 My Hub is the personal side of Control Hub: the projects you have going on, the tasks inside them, and the code and websites behind them. It sits next to the Hermes pages, and a task can be handed to Hermes as a mission with one click.
 
-Sidebar: **My Hub → Projects · Tasks · Code & Sites**. The dashboard shows a summary at the top.
+Sidebar: **My Hub → Projects · Tasks · Code & Sites · Import & Sync**. The dashboard shows a summary at the top.
 
 ## Dashboard
 
@@ -58,8 +58,40 @@ Sites are checked when added, when you press the refresh icon, and whenever the 
 
 Checks run from the machine Control Hub runs on, so local addresses (`http://127.0.0.1:…`) work. Because Control Hub has no login of its own, run it only where you trust everyone who can reach it (see [DEPLOY.md](DEPLOY.md)).
 
+## Import & Sync (`/hub/import`)
+
+### Import
+
+Paste (or load) a JSON file, press **Preview** to see what would be added or changed, untick anything you don't want, then **Import**. Nothing is saved before that.
+
+```json
+{
+  "projects": [{"key": "client:apm", "name": "A Peaceful Mind", "description": "…", "color": "cyan", "status": "active"}],
+  "tasks": [{"key": "gmail:18c2…", "title": "Reply to Roberto", "notes": "…", "project": "client:apm", "priority": "high", "dueDate": "2026-11-16", "status": "todo"}],
+  "sites": [{"key": "render:srv-…", "name": "LaunchHost (staging)", "url": "https://…", "project": "client:apm"}],
+  "repos": [{"fullName": "owner/name", "project": "client:apm"}]
+}
+```
+
+Only `key` + `name` (projects), `key` + `title` (tasks), `name` + `url` (sites) and `fullName` (repos) are required. `project` may be a project key from the same file, an existing project's key, or a project name. Imported tasks show where they came from (Gmail, Calendar, Drive, Render…) based on the key's prefix.
+
+Rules, so importing again is always safe:
+
+- Items are matched by `key` (sites also by URL, repos by name, projects also by name), so nothing is duplicated.
+- Your edits win until the source changes: if you rename a task or move its due date, re-importing the same data leaves it alone. When the source data itself changes, the new values are applied.
+- Tasks you've finished are never reopened. An import can mark a task done (`"status": "done"`); new items that are already done are skipped.
+- An import never deletes anything.
+
+### Hermes sync
+
+**Schedule sync** creates a recurring Hermes mission (default: every morning at 7:00, server time; the first run starts immediately) named "My Hub sync". **Run once now** does a single run. Pick which sources it should read; **Show what Hermes is asked to do** shows the exact instructions.
+
+Each run, Hermes reads the chosen sources with the tools and credentials it already has on the server (skipping any it can't reach), writes the import JSON to `/tmp/my-hub-sync.json`, and posts it to `http://127.0.0.1:<PORT>/api/hub/import`, previewing first. It is told to only read: never send, reply, edit, delete, deploy, pause or spend anything. Each run's summary appears on **Orchestration → Missions**; change or pause the schedule on **Orchestration → Cron**.
+
+The job's quality depends on what your Hermes profile can access. If a source is always skipped, give Hermes the matching tool or credential (for example a Google Workspace skill or a Render API key in its `.env`).
+
 ## Data
 
-Everything is stored in Control Hub's own SQLite database (`CH_DATA_DIR/control-hub.db`) in the tables `hub_projects`, `hub_tasks`, `hub_sites` and `hub_repos`. They are created automatically the first time a hub page or API route is used, so no migration step is needed. Nothing is written to Hermes except missions you create from tasks.
+Everything is stored in Control Hub's own SQLite database (`CH_DATA_DIR/control-hub.db`) in the tables `hub_projects`, `hub_tasks`, `hub_sites` and `hub_repos` (imported items carry `external_key` and `external_hash`). Tables and columns are created automatically the first time a hub page or API route is used, so no migration step is needed. Nothing is written to Hermes except missions you create from tasks.
 
 API routes: [API.md](API.md) (`/api/hub/*`). Code: `src/lib/hub/`, `src/components/hub/`, `src/app/hub/`.

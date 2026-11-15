@@ -10,7 +10,7 @@ import {
   ScrollText, Sparkles, Rocket, Volume2, Mic, GitBranch,
   RotateCcw, ShieldCheck, Lock, Code,
   BookOpen, Bot, MessageCircle,
-  AudioLines, Settings2, Network, FolderKanban, ListChecks,
+  AudioLines, Settings2, Network, FolderKanban, ListChecks, Import,
 } from "lucide-react";
 
 import type { AccentColor } from "@/types/hermes";
@@ -54,6 +54,7 @@ export const mainSections: SidebarSection[] = [
       { icon: FolderKanban, label: "Projects", href: "/hub/projects", color: "green" },
       { icon: ListChecks, label: "Tasks", href: "/hub/tasks", color: "cyan" },
       { icon: GitBranch, label: "Code & Sites", href: "/hub/code", color: "purple" },
+      { icon: Import, label: "Import & Sync", href: "/hub/import", color: "cyan" },
     ],
   },
   {

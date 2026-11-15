@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Bot, Check, Pause, Pencil, Play, Trash2 } from "lucide-react";
 
 import { DueLabel, PriorityFlag, ProjectChip } from "@/components/hub/HubBits";
+import { sourceLabel } from "@/lib/hub/hub-format";
 import type { HubTask } from "@/types/hub";
 
 const MISSION_STATUS_CLASSES: Record<string, string> = {
@@ -45,6 +46,7 @@ export default function TaskRow({
   deleteArmed = false,
 }: TaskRowProps) {
   const done = task.status === "done";
+  const source = sourceLabel(task.externalKey);
   const actionBtn =
     "p-1.5 rounded-md text-white/35 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30";
 
@@ -89,9 +91,14 @@ export default function TaskRow({
             </span>
           )}
         </div>
-        {(task.notes || (!hideProject && task.projectName) || task.dueDate || task.missionId) && (
+        {(task.notes || (!hideProject && task.projectName) || task.dueDate || task.missionId || source) && (
           <div className="flex flex-wrap items-center gap-1.5 mt-1 min-w-0">
             {!hideProject && task.projectName && <ProjectChip name={task.projectName} color={task.projectColor} />}
+            {source && (
+              <span title={"Imported from " + source} className="text-[10px] font-mono rounded px-1.5 py-0.5 border border-white/10 text-white/40">
+                {source}
+              </span>
+            )}
             {task.dueDate && <DueLabel dueDate={task.dueDate} today={today} done={done} />}
             {task.missionId && (
               <Link

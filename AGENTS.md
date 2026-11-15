@@ -67,7 +67,7 @@ control-hub/
 │   │   │   ├── monitor/            # Aggregated system status
 
 │   │   │   ├── templates/          # Custom template CRUD
-│   │   │   ├── hub/                # My Hub: projects, tasks, sites, repos, GitHub activity
+│   │   │   ├── hub/                # My Hub: projects, tasks, sites, repos, GitHub activity, import
 
 │   │   │   └── ...                 # Other endpoints
 
@@ -342,7 +342,7 @@ Control Hub is a command centre, not a file manager. The operator opens the dash
 
 §
 
-**Sidebar sections:** Main (Dashboard, Sessions, Memory, Logs) | My Hub (Projects, Tasks, Code & Sites) | Orchestration (Cron, Missions, Chat) | Operations (Agents, Skills, Tools, Personalities) | Rec Room (Story Weaver) | Config (Models, Seed, HERMES.md, Environment + YAML sections). Gateway health appears on the dashboard and in Orchestration → Chat (no separate Gateway page).
+**Sidebar sections:** Main (Dashboard, Sessions, Memory, Logs) | My Hub (Projects, Tasks, Code & Sites, Import & Sync) | Orchestration (Cron, Missions, Chat) | Operations (Agents, Skills, Tools, Personalities) | Rec Room (Story Weaver) | Config (Models, Seed, HERMES.md, Environment + YAML sections). Gateway health appears on the dashboard and in Orchestration → Chat (no separate Gateway page).
 
 **Profiles:** SQLite `agent_profiles` is source of truth; push/pull/drift on Operations → Agents mirrors Config → Models sync. See [docs/CATALOG_AND_PROFILES.md](docs/CATALOG_AND_PROFILES.md). Per-profile Hermes toolsets: [docs/TOOLS_AND_MISSIONS.md](docs/TOOLS_AND_MISSIONS.md).
 

@@ -183,6 +183,7 @@ interface TaskRow {
   status: string;
   priority: string;
   due_date: string | null;
+  external_key: string | null;
   mission_id: string | null;
   mission_name: string | null;
   mission_status: string | null;
@@ -204,6 +205,7 @@ function rowToTask(row: TaskRow): HubTask {
     status: pick<TaskStatus>(row.status, TASK_STATUSES, "todo"),
     priority: pick<TaskPriority>(row.priority, TASK_PRIORITIES, "normal"),
     dueDate: row.due_date,
+    externalKey: row.external_key ?? null,
     missionId: row.mission_id,
     missionName: row.mission_name,
     missionStatus: row.mission_status,

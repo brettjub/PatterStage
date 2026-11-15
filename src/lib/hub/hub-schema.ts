@@ -61,11 +61,47 @@ CREATE TABLE IF NOT EXISTS hub_repos (
 );
 `;
 
+/**
+ * Columns added after the first release of the hub tables. Older databases
+ * get them through ALTER TABLE; new ones too (the CREATE statements above
+ * stay minimal so there is one code path).
+ *
+ * external_key  — stable id from the source an item was imported from
+ *                 (e.g. "gmail:<threadId>"), so re-imports update in place.
+ * external_hash — hash of the fields last imported; a re-import only
+ *                 overwrites local edits when the source itself changed.
+ */
+const ADDED_COLUMNS: { table: string; column: string; type: string }[] = [
+  { table: "hub_projects", column: "external_key", type: "TEXT" },
+  { table: "hub_projects", column: "external_hash", type: "TEXT" },
+  { table: "hub_tasks", column: "external_key", type: "TEXT" },
+  { table: "hub_tasks", column: "external_hash", type: "TEXT" },
+  { table: "hub_sites", column: "external_key", type: "TEXT" },
+  { table: "hub_sites", column: "external_hash", type: "TEXT" },
+];
+
+const HUB_INDEX_SQL = /* sql */ `
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hub_projects_ext ON hub_projects(external_key) WHERE external_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hub_tasks_ext    ON hub_tasks(external_key)    WHERE external_key IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_hub_sites_ext    ON hub_sites(external_key)    WHERE external_key IS NOT NULL;
+`;
+
+function columnExists(database: Database.Database, table: string, column: string): boolean {
+  const rows = database.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return rows.some((r) => r.name === column);
+}
+
 const ensured = new WeakSet<Database.Database>();
 
-/** Create the hub tables on `database` if they are missing. Cheap after the first call. */
+/** Create the hub tables and columns on `database` if they are missing. Cheap after the first call. */
 export function ensureHubSchema(database: Database.Database): void {
   if (ensured.has(database)) return;
   database.exec(HUB_SCHEMA_SQL);
+  for (const { table, column, type } of ADDED_COLUMNS) {
+    if (!columnExists(database, table, column)) {
+      database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    }
+  }
+  database.exec(HUB_INDEX_SQL);
   ensured.add(database);
 }

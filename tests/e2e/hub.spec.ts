@@ -80,6 +80,39 @@ test.describe("My Hub", () => {
     }
   });
 
+  test("import page previews, lets you untick items, and imports", async ({ page, request }) => {
+    const id = stamp();
+    const prefix = "E2E import " + id;
+    const data = {
+      projects: [{ key: "e2e-proj-" + id, name: prefix + " project" }],
+      tasks: [
+        { key: "e2e:" + id + ":a", title: prefix + " keep", project: "e2e-proj-" + id },
+        { key: "e2e:" + id + ":b", title: prefix + " drop" },
+      ],
+    };
+    try {
+      await page.goto("/hub/import");
+      await expect(page.getByRole("heading", { name: "Import & Sync", exact: true })).toBeVisible();
+      await page.getByLabel("Import data (JSON)").fill(JSON.stringify(data));
+      await page.getByRole("button", { name: "Preview" }).click();
+      const preview = page.getByTestId("hub-import-preview");
+      await expect(preview).toContainText("3 of 3 new or changed items selected");
+      await preview.getByRole("checkbox", { name: "Import " + prefix + " drop" }).uncheck();
+      await preview.getByRole("button", { name: "Import 2 items" }).click();
+      await expect(page.getByText("Imported: 2 added, 0 updated")).toBeVisible();
+
+      const tasks = (await (await request.get("/api/hub/tasks")).json()).data.tasks as { title: string; projectName: string | null }[];
+      const mine = tasks.filter((t) => t.title.startsWith(prefix));
+      expect(mine.map((t) => t.title)).toEqual([prefix + " keep"]);
+      expect(mine[0].projectName).toBe(prefix + " project");
+
+      await expect(page.getByRole("heading", { name: /Hermes sync/i })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Schedule sync" })).toBeEnabled();
+    } finally {
+      await cleanup(request, prefix + " project", prefix);
+    }
+  });
+
   test("code & sites page loads and rejects a bad URL", async ({ page }) => {
     await page.goto("/hub/code");
     await expect(page.getByRole("heading", { name: "Code & Sites", exact: true })).toBeVisible();

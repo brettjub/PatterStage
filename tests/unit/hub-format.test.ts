@@ -6,6 +6,7 @@ import {
   daysBetween,
   describeDue,
   percent,
+  sourceLabel,
   todayLocal,
 } from "@/lib/hub/hub-format";
 
@@ -62,5 +63,16 @@ describe("percent", () => {
   it("rounds and handles zero totals", () => {
     expect(percent(1, 3)).toBe(33);
     expect(percent(0, 0)).toBe(0);
+  });
+});
+
+describe("sourceLabel", () => {
+  it("names known sources and title-cases unknown ones", () => {
+    expect(sourceLabel("gmail:18c2")).toBe("Gmail");
+    expect(sourceLabel("gcal:abc")).toBe("Calendar");
+    expect(sourceLabel("render:srv-1:suspended")).toBe("Render");
+    expect(sourceLabel("notion:page")).toBe("Notion");
+    expect(sourceLabel("no-prefix")).toBeNull();
+    expect(sourceLabel(null)).toBeNull();
   });
 });
