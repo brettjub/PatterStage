@@ -12,6 +12,7 @@ import {
   tailLogHint,
   writeDeployStatusRunning,
 } from "@/lib/deploy-status";
+import { buildDeployCommand } from "@/lib/deploy-command";
 import { sanitizeGitBranch } from "@/lib/git-branch";
 
 // ═══════════════════════════════════════════════════════════════
@@ -396,10 +397,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function quoteShellSingle(arg: string): string {
-  return "'" + arg.replace(/'/g, "'\"'\"'") + "'";
-}
-
 function spawnChDeploy(
   unitName: string,
   deployArgs: string[],
@@ -413,8 +410,8 @@ function spawnChDeploy(
     };
   }
 
-  const command =
-    `sleep 1; bash ${quoteShellSingle(CH_DEPLOY_SCRIPT)} ${deployArgs.map(quoteShellSingle).join(" ")}`.trimEnd();
+  // Same Node as this server (systemd-run would otherwise pick the system one).
+  const command = buildDeployCommand(CH_DEPLOY_SCRIPT, deployArgs);
 
   try {
     // Clear any stale failed systemd transient unit before spawning
